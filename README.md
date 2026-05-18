@@ -51,7 +51,7 @@ GitHub Repo: https://github.com/your-name/ai-stock-dashboard
 ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key
 
 LLM_API_KEY=your_sensenova_key
-.LLM_BASE_URL=https://token.sensenova.cn/v1
+LLM_BASE_URL=https://token.sensenova.cn/v1
 LLM_MODEL=sensenova-6.7-flash-lite
 LLM_RESPONSE_FORMAT_JSON=false
 
@@ -66,7 +66,7 @@ NODE_ENV=development
 
 - `.env` 已被 `.gitignore` 忽略，不要提交到 GitHub。
 - `SUPABASE_SERVICE_ROLE_KEY` 只能放后端环境变量，不能放到前端。
-- 商汤 API 使用 Bearer Token 鉴权；代码中通过 OpenAI SDK 的 `apiKey` 自动加入 `Authorization: Bearer ***`
+- 商汤 API 使用 Bearer Token 鉴权；代码中通过 OpenAI SDK 的 `apiKey` 自动加入 `Authorization: Bearer <key>`，不需要手写请求头。
 - 当前 SenseNova 文档截图没有明确展示 `response_format` 字段，因此默认 `LLM_RESPONSE_FORMAT_JSON=false`，通过强 Prompt + 后端校验保障 JSON 稳定性。
 
 ## Supabase 建表 SQL
@@ -151,7 +151,7 @@ http://localhost:3000/api/health
   "change": 1.99,
   "changePercent": 0.67,
   "dayRangePercent": 2.23,
-  "volume": ume": 54862836,
+  "volume": 54862836,
   "recentCloses": [],
   "cached": false,
   "source": "Alpha Vantage TIME_SERIES_DAILY"
@@ -288,7 +288,7 @@ Start Command: npm start
 ```json
 {
   "summary": "...",
-  "s": "Bullish",
+  "sentiment": "Bullish",
   "risk_level": "Medium"
 }
 ```
@@ -300,7 +300,7 @@ Start Command: npm start
 
 我使用 AI 工具定位后，确认问题不是 `JSON.parse()` 本身，而是 Prompt 约束不够强。解决方式：
 
-1. 在 system prompt 中明确要求"只返回合法 JSON"。
+1. 在 system prompt 中明确要求“只返回合法 JSON”。
 2. 禁止 Markdown、代码块和解释性文字。
 3. 固定 JSON 字段和枚举值。
 4. 后端增加 JSON 提取与字段校验。
