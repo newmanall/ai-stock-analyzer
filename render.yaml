@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: ai-stock-dashboard
+    runtime: node
+    plan: free
+    buildCommand: npm run install-all && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: NODE_ENV
+        value: production
+      - key: ALPHA_VANTAGE_API_KEY
+        sync: false
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_BASE_URL
+        value: https://token.sensenova.cn/v1
+      - key: LLM_MODEL
+        value: sensenova-6.7-flash-lite
+      - key: LLM_RESPONSE_FORMAT_JSON
+        value: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false

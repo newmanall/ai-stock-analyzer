@@ -447,4 +447,33 @@ MIT License - 仅供学习参考，不构成投资建议
 
 ---
 
+## 🚀 Render 部署
+
+本项目支持 **Render 单服务部署**：Express 在生产模式下托管前端 `client/dist` 并提供 `/api/*` 后端接口。
+
+### Render 配置
+
+```txt
+Build Command: npm run install-all && npm run build
+Start Command: npm start
+```
+
+### 环境变量 (Render Environment)
+
+```env
+NODE_VERSION=20
+NODE_ENV=production
+ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key
+LLM_API_KEY=your_sensenova_key
+LLM_BASE_URL=https://token.sensenova.cn/v1
+LLM_MODEL=sensenova-6.7-flash-lite
+LLM_RESPONSE_FORMAT_JSON=false
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+```
+
+详细部署步骤见 [`DEPLOY_RENDER.md`](./DEPLOY_RENDER.md)。
+
+---
+
 > ⚠️ **免责声明**: 本应用仅供学习和演示目的，分析结果不构成投资建议。投资有风险，决策需谨慎。

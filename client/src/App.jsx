@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
-import { fetchStockData } from "./api.js";
+import { useEffect, useMemo, useState } from "react";
+import { analyzeStockData, fetchRecentAnalyses, fetchStockData } from "./api.js";
 
 function formatNumber(value, options = {}) {
-  if (typeof value !== "number") return "-";
+  if (typeof value !== "number" || Number.isNaN(value)) return "-";
   return new Intl.NumberFormat("zh-CN", {
     maximumFractionDigits: 2,
     ...options
@@ -10,17 +10,53 @@ function formatNumber(value, options = {}) {
 }
 
 function formatCurrency(value) {
-  if (typeof value !== "number") return "-";
+  if (typeof value !== "number" || Number.isNaN(value)) return "-";
   return `$${formatNumber(value)}`;
+}
+
+function translateSentiment(value) {
+  const map = {
+    Bullish: "看涨",
+    Neutral: "中性",
+    Bearish: "看跌"
+  };
+  return map[value] || value || "-";
+}
+
+function translateRisk(value) {
+  const map = {
+    Low: "低风险",
+    Medium: "中等风险",
+    High: "高风险"
+  };
+  return map[value] || value || "-";
 }
 
 export default function App() {
   const [symbol, setSymbol] = useState("AAPL");
   const [stockData, setStockData] = useState(null);
+  const [analysis, setAnalysis] = useState(null);
   const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [recentAnalyses, setRecentAnalyses] = useState([]);
+  const [recentWarning, setRecentWarning] = useState("");
 
   const isPositive = (stockData?.changePercent || 0) >= 0;
+
+  async function loadRecentAnalyses() {
+    try {
+      const data = await fetchRecentAnalyses(5);
+      setRecentAnalyses(data.records || []);
+      setRecentWarning(data.warning || "");
+    } catch (err) {
+      setRecentWarning(err.message || "读取历史分析记录失败。");
+    }
+  }
+
+  useEffect(() => {
+    loadRecentAnalyses();
+  }, []);
 
   async function handleFetchStock() {
     const cleanSymbol = symbol.trim().toUpperCase();
@@ -32,15 +68,38 @@ export default function App() {
 
     try {
       setError("");
-      setIsLoading(true);
+      setIsFetching(true);
       setStockData(null);
+      setAnalysis(null);
 
       const data = await fetchStockData(cleanSymbol);
+      setSymbol(data.symbol);
       setStockData(data);
     } catch (err) {
       setError(err.message || "获取行情数据失败，请稍后再试。");
     } finally {
-      setIsLoading(false);
+      setIsFetching(false);
+    }
+  }
+
+  async function handleAnalyzeStock() {
+    if (!stockData) {
+      setError("请先获取行情数据，再生成 AI 分析。");
+      return;
+    }
+
+    try {
+      setError("");
+      setIsAnalyzing(true);
+      setAnalysis(null);
+
+      const result = await analyzeStockData(stockData.symbol, stockData);
+      setAnalysis(result);
+      await loadRecentAnalyses();
+    } catch (err) {
+      setError(err.message || "生成 AI 分析失败，请检查 LLM_API_KEY、LLM_BASE_URL、LLM_MODEL 是否配置正确。");
+    } finally {
+      setIsAnalyzing(false);
     }
   }
 
@@ -49,21 +108,21 @@ export default function App() {
       <section className="hero-card">
         <div className="hero-topline">
           <span className="status-dot" />
-          第二阶段 · 已接入真实行情 API
+          第四阶段 · 已接入 Supabase 存储
         </div>
 
         <div className="hero-layout">
           <div>
             <div className="eyebrow">AI 股票分析面板</div>
-            <h1>输入股票代码，获取实时市场快照</h1>
+            <h1>获取行情、生成 AI 分析并入库</h1>
             <p className="subtitle">
-              当前页面已从 Mock 数据升级为 Alpha Vantage 日线行情。下一阶段将把这些结构化数据交给 LLM，生成严格 JSON 格式的投资分析摘要。
+              输入股票代码后先拉取 Alpha Vantage 日线行情，再调用商汤 SenseNova 生成严格 JSON 分析，并将行情数据与 AI 分析结果写入 Supabase。
             </p>
           </div>
 
           <div className="hero-note">
-            <strong>数据链路</strong>
-            <span>前端输入 → Express 后端 → Alpha Vantage → 清洗后返回前端</span>
+            <strong>当前链路</strong>
+            <span>前端 → Express → Alpha Vantage → SenseNova → JSON 校验 → Supabase 入库</span>
           </div>
         </div>
 
@@ -77,8 +136,15 @@ export default function App() {
             placeholder="例如 AAPL / MSFT / TSLA"
             aria-label="股票代码"
           />
-          <button onClick={handleFetchStock} disabled={isLoading}>
-            {isLoading ? "正在获取..." : "获取行情"}
+          <button onClick={handleFetchStock} disabled={isFetching || isAnalyzing}>
+            {isFetching ? "正在获取..." : "获取行情"}
+          </button>
+          <button
+            className="secondary-button"
+            onClick={handleAnalyzeStock}
+            disabled={!stockData || isFetching || isAnalyzing}
+          >
+            {isAnalyzing ? "分析中..." : "生成 AI 分析"}
           </button>
         </div>
 
@@ -125,36 +191,52 @@ export default function App() {
           <div className="panel-header">
             <div>
               <span>AI 分析</span>
-              <small>第三阶段接入 LLM</small>
+              <small>SenseNova 返回严格 JSON，Supabase 保存结果</small>
             </div>
           </div>
 
-          <div className="analysis-placeholder">
-            <div className="json-badge">严格 JSON 输出预览</div>
-            <p>
-              下一阶段会把左侧行情数据发送给 LLM，并强制返回只有以下字段的 JSON，避免 Markdown、自然语言说明或多余字段。
-            </p>
-            <pre>{`{
+          {!stockData ? (
+            <div className="analysis-placeholder">
+              <div className="json-badge">等待行情数据</div>
+              <p>先在左侧获取股票行情，然后点击“生成 AI 分析”。</p>
+              <pre>{`{
   "summary": "...",
   "sentiment": "Bullish",
   "risk_level": "Medium"
 }`}</pre>
-          </div>
+            </div>
+          ) : analysis ? (
+            <AnalysisResult analysis={analysis} />
+          ) : (
+            <div className="analysis-placeholder">
+              <div className="json-badge">严格 JSON 输出预览</div>
+              <p>
+                已获取 {stockData.symbol} 行情。点击上方“生成 AI 分析”后，后端会用强 Prompt + JSON.parse + 字段校验，要求模型只返回指定字段。
+              </p>
+              <pre>{`{
+  "summary": "...",
+  "sentiment": "Bullish | Neutral | Bearish",
+  "risk_level": "Low | Medium | High"
+}`}</pre>
+            </div>
+          )}
 
           <div className="todo-list">
             <div>
               <span>01</span>
-              编写 LLM Prompt
+              Prompt 强制只返回 JSON
             </div>
             <div>
               <span>02</span>
-              后端校验 JSON 字段
+              后端 JSON.parse + 字段校验
             </div>
             <div>
               <span>03</span>
-              保存分析结果到 Supabase
+              分析成功后写入 Supabase
             </div>
           </div>
+
+          <RecentHistory records={recentAnalyses} warning={recentWarning} />
         </div>
       </section>
     </main>
@@ -212,7 +294,7 @@ function StockCard({ stockData, isPositive }) {
       <div className="mini-chart-card">
         <div className="mini-chart-header">
           <span>近 7 个交易日收盘价</span>
-          <small>用于下一阶段 AI 趋势判断</small>
+          <small>用于 AI 趋势判断</small>
         </div>
         <div className="mini-chart">
           {chartData.map((item) => (
@@ -226,6 +308,82 @@ function StockCard({ stockData, isPositive }) {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function AnalysisResult({ analysis }) {
+  const sentimentClass = `sentiment-pill sentiment-${analysis.sentiment?.toLowerCase()}`;
+  const riskClass = `risk-pill risk-${analysis.risk_level?.toLowerCase()}`;
+
+  return (
+    <div className="analysis-result">
+      <div className="result-label">AI 结构化分析结果</div>
+      <p className="summary-text">{analysis.summary}</p>
+
+      <div className="analysis-pills">
+        <div className={sentimentClass}>
+          <span>情绪</span>
+          <strong>{translateSentiment(analysis.sentiment)}</strong>
+          <small>{analysis.sentiment}</small>
+        </div>
+        <div className={riskClass}>
+          <span>风险</span>
+          <strong>{translateRisk(analysis.risk_level)}</strong>
+          <small>{analysis.risk_level}</small>
+        </div>
+      </div>
+
+      <pre className="json-output">{JSON.stringify({
+        summary: analysis.summary,
+        sentiment: analysis.sentiment,
+        risk_level: analysis.risk_level
+      }, null, 2)}</pre>
+
+      <div className={analysis.saved_to_supabase ? "storage-status success" : "storage-status warning"}>
+        {analysis.saved_to_supabase
+          ? `已写入 Supabase，记录 ID：${analysis.db_record?.id || "-"}`
+          : analysis.save_warning || "尚未写入 Supabase。"}
+      </div>
+
+      {analysis.generated_at && (
+        <div className="generated-time">
+          生成时间：{new Date(analysis.generated_at).toLocaleString("zh-CN")}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RecentHistory({ records, warning }) {
+  return (
+    <div className="recent-card">
+      <div className="recent-header">
+        <span>最近分析记录</span>
+        <small>来自 Supabase</small>
+      </div>
+
+      {warning ? (
+        <div className="recent-warning">{warning}</div>
+      ) : records.length === 0 ? (
+        <div className="recent-empty">暂无历史记录。完成一次 AI 分析并成功入库后会显示在这里。</div>
+      ) : (
+        <div className="recent-list">
+          {records.map((record) => (
+            <div className="recent-item" key={record.id}>
+              <div>
+                <strong>{record.symbol}</strong>
+                <p>{record.summary}</p>
+              </div>
+              <div className="recent-meta">
+                <span>{translateSentiment(record.sentiment)}</span>
+                <small>{translateRisk(record.risk_level)}</small>
+                <time>{new Date(record.created_at).toLocaleString("zh-CN")}</time>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
