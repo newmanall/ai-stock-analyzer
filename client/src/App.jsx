@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { analyzeStockData, fetchRecentAnalyses, fetchStockData } from "./api.js";
 
+const QUICK_SYMBOLS = ["AAPL", "MSFT", "TSLA", "NVDA"];
+
 function formatNumber(value, options = {}) {
   if (typeof value !== "number" || Number.isNaN(value)) return "-";
   return new Intl.NumberFormat("zh-CN", {
@@ -12,6 +14,17 @@ function formatNumber(value, options = {}) {
 function formatCurrency(value) {
   if (typeof value !== "number" || Number.isNaN(value)) return "-";
   return `$${formatNumber(value)}`;
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+  return new Date(value).toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
 }
 
 function translateSentiment(value) {
@@ -32,6 +45,17 @@ function translateRisk(value) {
   return map[value] || value || "-";
 }
 
+function normalizeCloseItem(item) {
+  if (typeof item === "number") {
+    return { date: "", close: item };
+  }
+
+  return {
+    date: item?.date || "",
+    close: typeof item?.close === "number" ? item.close : Number(item?.close)
+  };
+}
+
 export default function App() {
   const [symbol, setSymbol] = useState("AAPL");
   const [stockData, setStockData] = useState(null);
@@ -41,8 +65,6 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [recentAnalyses, setRecentAnalyses] = useState([]);
   const [recentWarning, setRecentWarning] = useState("");
-
-  const isPositive = (stockData?.changePercent || 0) >= 0;
 
   async function loadRecentAnalyses() {
     try {
@@ -58,8 +80,8 @@ export default function App() {
     loadRecentAnalyses();
   }, []);
 
-  async function handleFetchStock() {
-    const cleanSymbol = symbol.trim().toUpperCase();
+  async function handleFetchStock(nextSymbol = symbol) {
+    const cleanSymbol = nextSymbol.trim().toUpperCase();
 
     if (!cleanSymbol) {
       setError("请输入股票代码，例如 AAPL、MSFT、TSLA。");
@@ -97,185 +119,154 @@ export default function App() {
       setAnalysis(result);
       await loadRecentAnalyses();
     } catch (err) {
-      setError(err.message || "生成 AI 分析失败，请检查 LLM_API_KEY、LLM_BASE_URL、LLM_MODEL 是否配置正确。");
+      setError(err.message || "生成 AI 分析失败，请检查模型服务配置后再试。");
     } finally {
       setIsAnalyzing(false);
     }
   }
 
   return (
-    <main className="page-shell">
-      <section className="hero-card">
-        <div className="hero-topline">
-          <span className="status-dot" />
-          第四阶段 · 已接入 Supabase 存储
-        </div>
+    <main className="app-shell">
+      <TopBar />
 
-        <div className="hero-layout">
-          <div>
-            <div className="eyebrow">AI 股票分析面板</div>
-            <h1>获取行情、生成 AI 分析并入库</h1>
-            <p className="subtitle">
-              输入股票代码后先拉取 Alpha Vantage 日线行情，再调用商汤 SenseNova 生成严格 JSON 分析，并将行情数据与 AI 分析结果写入 Supabase。
-            </p>
+      <section className="hero">
+        <div className="hero-content">
+          <span className="eyebrow">AI Stock Insight</span>
+          <h1>智能股票分析面板</h1>
+          <p>
+            输入股票代码，获取最新日线行情，并生成简洁的 AI 分析摘要。适合快速查看价格变化、市场情绪与风险等级。
+          </p>
+
+          <div className="search-card">
+            <div className="search-row">
+              <input
+                value={symbol}
+                onChange={(event) => setSymbol(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") handleFetchStock();
+                }}
+                placeholder="输入股票代码，例如 AAPL"
+                aria-label="股票代码"
+              />
+              <button className="primary-button" onClick={() => handleFetchStock()} disabled={isFetching || isAnalyzing}>
+                {isFetching ? "获取中..." : "获取行情"}
+              </button>
+              <button
+                className="accent-button"
+                onClick={handleAnalyzeStock}
+                disabled={!stockData || isFetching || isAnalyzing}
+              >
+                {isAnalyzing ? "分析中..." : "生成分析"}
+              </button>
+            </div>
+
+            <div className="quick-row" aria-label="快捷股票代码">
+              {QUICK_SYMBOLS.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => {
+                    setSymbol(item);
+                    setError("");
+                  }}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="hero-note">
-            <strong>当前链路</strong>
-            <span>前端 → Express → Alpha Vantage → SenseNova → JSON 校验 → Supabase 入库</span>
+          {error && <div className="error-banner">{error}</div>}
+        </div>
+
+        <div className="hero-side-card" aria-label="系统状态">
+          <div className="status-pill">
+            <span />
+            数据服务已连接
           </div>
+          <div className="side-number">3</div>
+          <p>行情获取、AI 分析、云端记录已整合为一条操作流程。</p>
         </div>
-
-        <div className="input-row">
-          <input
-            value={symbol}
-            onChange={(event) => setSymbol(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") handleFetchStock();
-            }}
-            placeholder="例如 AAPL / MSFT / TSLA"
-            aria-label="股票代码"
-          />
-          <button onClick={handleFetchStock} disabled={isFetching || isAnalyzing}>
-            {isFetching ? "正在获取..." : "获取行情"}
-          </button>
-          <button
-            className="secondary-button"
-            onClick={handleAnalyzeStock}
-            disabled={!stockData || isFetching || isAnalyzing}
-          >
-            {isAnalyzing ? "分析中..." : "生成 AI 分析"}
-          </button>
-        </div>
-
-        <div className="quick-symbols" aria-label="快捷股票代码">
-          {["AAPL", "MSFT", "TSLA", "NVDA"].map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => {
-                setSymbol(item);
-                setError("");
-              }}
-            >
-              {item}
-            </button>
-          ))}
-        </div>
-
-        {error && <div className="error-box">{error}</div>}
       </section>
 
-      <section className="content-grid">
-        <div className="panel market-panel">
-          <div className="panel-header">
-            <div>
-              <span>市场行情</span>
-              <small>真实 API 返回并由后端清洗</small>
-            </div>
-            {stockData && <em>{stockData.source}</em>}
-          </div>
-
-          {!stockData ? (
-            <div className="empty-state">
-              <div className="empty-icon">⌘</div>
-              <strong>还没有行情数据</strong>
-              <p>输入股票代码后点击“获取行情”。如果免费 API 触发频率限制，页面会显示中文错误提示。</p>
-            </div>
-          ) : (
-            <StockCard stockData={stockData} isPositive={isPositive} />
-          )}
-        </div>
-
-        <div className="panel insight-panel">
-          <div className="panel-header">
-            <div>
-              <span>AI 分析</span>
-              <small>SenseNova 返回严格 JSON，Supabase 保存结果</small>
-            </div>
-          </div>
-
-          {!stockData ? (
-            <div className="analysis-placeholder">
-              <div className="json-badge">等待行情数据</div>
-              <p>先在左侧获取股票行情，然后点击“生成 AI 分析”。</p>
-              <pre>{`{
-  "summary": "...",
-  "sentiment": "Bullish",
-  "risk_level": "Medium"
-}`}</pre>
-            </div>
-          ) : analysis ? (
-            <AnalysisResult analysis={analysis} />
-          ) : (
-            <div className="analysis-placeholder">
-              <div className="json-badge">严格 JSON 输出预览</div>
-              <p>
-                已获取 {stockData.symbol} 行情。点击上方“生成 AI 分析”后，后端会用强 Prompt + JSON.parse + 字段校验，要求模型只返回指定字段。
-              </p>
-              <pre>{`{
-  "summary": "...",
-  "sentiment": "Bullish | Neutral | Bearish",
-  "risk_level": "Low | Medium | High"
-}`}</pre>
-            </div>
-          )}
-
-          <div className="todo-list">
-            <div>
-              <span>01</span>
-              Prompt 强制只返回 JSON
-            </div>
-            <div>
-              <span>02</span>
-              后端 JSON.parse + 字段校验
-            </div>
-            <div>
-              <span>03</span>
-              分析成功后写入 Supabase
-            </div>
-          </div>
-
-          <RecentHistory records={recentAnalyses} warning={recentWarning} />
-        </div>
+      <section className="dashboard-grid">
+        <StockOverview stockData={stockData} loading={isFetching} />
+        <AnalysisPanel stockData={stockData} analysis={analysis} loading={isAnalyzing} />
       </section>
+
+      <HistorySection records={recentAnalyses} warning={recentWarning} />
+
+      <footer className="footer-note">
+        本项目仅用于技术演示和学习交流，AI 分析结果不构成任何投资建议。
+      </footer>
     </main>
   );
 }
 
-function StockCard({ stockData, isPositive }) {
-  const chartData = useMemo(() => {
-    const closes = stockData.recentCloses || [];
-    const values = closes.map((item) => item.close);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const range = max - min || 1;
+function TopBar() {
+  return (
+    <header className="top-bar">
+      <div className="brand-mark">AI</div>
+      <div>
+        <strong>AI Stock Insight</strong>
+        <span>智能行情分析</span>
+      </div>
+      <nav aria-label="功能概览">
+        <span>实时行情</span>
+        <span>AI 摘要</span>
+        <span>云端记录</span>
+      </nav>
+    </header>
+  );
+}
 
-    return closes.map((item) => ({
-      ...item,
-      height: 28 + ((item.close - min) / range) * 72
-    }));
-  }, [stockData]);
+function StockOverview({ stockData, loading }) {
+  if (loading) {
+    return (
+      <section className="panel market-panel">
+        <PanelTitle title="市场概览" subtitle="正在获取最新行情" />
+        <SkeletonMarket />
+      </section>
+    );
+  }
+
+  if (!stockData) {
+    return (
+      <section className="panel market-panel">
+        <PanelTitle title="市场概览" subtitle="输入股票代码后开始查询" />
+        <div className="empty-card">
+          <div className="empty-icon">↗</div>
+          <strong>等待行情数据</strong>
+          <p>输入股票代码并点击“获取行情”，这里会展示最新收盘价、涨跌幅和近 7 日趋势。</p>
+        </div>
+      </section>
+    );
+  }
+
+  const isPositive = (stockData.changePercent || 0) >= 0;
 
   return (
-    <div className="stock-card">
-      <div className="stock-title-row">
+    <section className="panel market-panel">
+      <PanelTitle
+        title="市场概览"
+        subtitle={stockData.cached ? "已使用缓存行情，避免重复请求" : "来自 Alpha Vantage 日线行情"}
+        tag={stockData.cached ? "缓存" : "实时"}
+      />
+
+      {stockData.warning && <div className="soft-warning">{stockData.warning}</div>}
+
+      <div className="stock-header">
         <div>
-          <div className="symbol">{stockData.symbol}</div>
-          <div className="date">
-            最新交易日：{stockData.latestDate} · 前一交易日：{stockData.previousDate}
-          </div>
+          <div className="symbol-title">{stockData.symbol}</div>
+          <div className="trade-date">最新交易日：{stockData.latestDate}</div>
         </div>
-        <div className={isPositive ? "badge positive" : "badge negative"}>
-          {isPositive ? "+" : ""}
-          {stockData.changePercent}%
-        </div>
+        <TrendBadge isPositive={isPositive} value={stockData.changePercent} />
       </div>
 
-      <div className="price-strip">
+      <div className="price-card">
         <span>最新收盘价</span>
         <strong>{formatCurrency(stockData.close)}</strong>
-        <small className={isPositive ? "positive-text" : "negative-text"}>
+        <small className={isPositive ? "up-text" : "down-text"}>
           {isPositive ? "+" : ""}
           {formatCurrency(stockData.change)} / {isPositive ? "+" : ""}
           {stockData.changePercent}%
@@ -291,108 +282,192 @@ function StockCard({ stockData, isPositive }) {
         <Metric label="日内振幅" value={`${stockData.dayRangePercent}%`} />
       </div>
 
-      <div className="mini-chart-card">
-        <div className="mini-chart-header">
-          <span>近 7 个交易日收盘价</span>
-          <small>用于 AI 趋势判断</small>
+      <MiniChart data={stockData.recentCloses || []} />
+    </section>
+  );
+}
+
+function AnalysisPanel({ stockData, analysis, loading }) {
+  return (
+    <section className="panel analysis-panel">
+      <PanelTitle title="AI 分析" subtitle="结构化摘要、情绪与风险等级" />
+
+      {loading ? (
+        <div className="analysis-loading">
+          <div className="pulse-orb" />
+          <strong>正在生成分析</strong>
+          <p>模型正在阅读行情数据，并返回固定 JSON 字段。</p>
         </div>
-        <div className="mini-chart">
-          {chartData.map((item) => (
-            <div className="bar-item" key={item.date} title={`${item.date}: ${item.close}`}>
-              <div className="bar-value">{formatNumber(item.close)}</div>
-              <div className="bar-track">
-                <div className="bar-fill" style={{ height: `${item.height}px` }} />
-              </div>
-              <div className="bar-date">{item.date.slice(5)}</div>
-            </div>
-          ))}
+      ) : !stockData ? (
+        <div className="empty-card compact">
+          <div className="empty-icon">✦</div>
+          <strong>等待生成分析</strong>
+          <p>获取行情后，点击“生成分析”即可看到 AI 摘要。</p>
         </div>
-      </div>
-    </div>
+      ) : analysis ? (
+        <AnalysisResult analysis={analysis} />
+      ) : (
+        <div className="empty-card compact">
+          <div className="empty-icon">✓</div>
+          <strong>{stockData.symbol} 行情已就绪</strong>
+          <p>点击顶部“生成分析”，AI 会根据当前行情输出摘要、情绪和风险等级。</p>
+        </div>
+      )}
+    </section>
   );
 }
 
 function AnalysisResult({ analysis }) {
-  const sentimentClass = `sentiment-pill sentiment-${analysis.sentiment?.toLowerCase()}`;
-  const riskClass = `risk-pill risk-${analysis.risk_level?.toLowerCase()}`;
+  const sentimentClass = `insight-chip sentiment-${analysis.sentiment?.toLowerCase()}`;
+  const riskClass = `insight-chip risk-${analysis.risk_level?.toLowerCase()}`;
 
   return (
     <div className="analysis-result">
-      <div className="result-label">AI 结构化分析结果</div>
+      <span className="section-label">AI 观点摘要</span>
       <p className="summary-text">{analysis.summary}</p>
 
-      <div className="analysis-pills">
+      <div className="insight-grid">
         <div className={sentimentClass}>
-          <span>情绪</span>
+          <span>市场情绪</span>
           <strong>{translateSentiment(analysis.sentiment)}</strong>
           <small>{analysis.sentiment}</small>
         </div>
         <div className={riskClass}>
-          <span>风险</span>
+          <span>风险等级</span>
           <strong>{translateRisk(analysis.risk_level)}</strong>
           <small>{analysis.risk_level}</small>
         </div>
       </div>
 
-      <pre className="json-output">{JSON.stringify({
-        summary: analysis.summary,
-        sentiment: analysis.sentiment,
-        risk_level: analysis.risk_level
-      }, null, 2)}</pre>
-
-      <div className={analysis.saved_to_supabase ? "storage-status success" : "storage-status warning"}>
-        {analysis.saved_to_supabase
-          ? `已写入 Supabase，记录 ID：${analysis.db_record?.id || "-"}`
-          : analysis.save_warning || "尚未写入 Supabase。"}
+      <div className={analysis.saved_to_supabase ? "save-line success" : "save-line warning"}>
+        {analysis.saved_to_supabase ? "分析结果已同步到云端记录" : analysis.save_warning || "分析结果尚未同步到云端。"}
       </div>
 
-      {analysis.generated_at && (
-        <div className="generated-time">
-          生成时间：{new Date(analysis.generated_at).toLocaleString("zh-CN")}
-        </div>
-      )}
+      {analysis.generated_at && <div className="time-line">生成时间：{formatDateTime(analysis.generated_at)}</div>}
+
+      <details className="technical-details">
+        <summary>查看原始 JSON</summary>
+        <pre>{JSON.stringify({
+          summary: analysis.summary,
+          sentiment: analysis.sentiment,
+          risk_level: analysis.risk_level
+        }, null, 2)}</pre>
+      </details>
     </div>
   );
 }
 
-function RecentHistory({ records, warning }) {
+function HistorySection({ records, warning }) {
   return (
-    <div className="recent-card">
-      <div className="recent-header">
-        <span>最近分析记录</span>
-        <small>来自 Supabase</small>
-      </div>
+    <section className="panel history-panel">
+      <PanelTitle title="最近记录" subtitle="最近 5 条 AI 分析结果" tag="Supabase" />
 
       {warning ? (
-        <div className="recent-warning">{warning}</div>
+        <div className="soft-warning">{warning}</div>
       ) : records.length === 0 ? (
-        <div className="recent-empty">暂无历史记录。完成一次 AI 分析并成功入库后会显示在这里。</div>
+        <div className="history-empty">完成一次 AI 分析后，历史记录会显示在这里。</div>
       ) : (
-        <div className="recent-list">
+        <div className="history-list">
           {records.map((record) => (
-            <div className="recent-item" key={record.id}>
+            <article className="history-item" key={record.id}>
               <div>
-                <strong>{record.symbol}</strong>
+                <div className="history-symbol">{record.symbol}</div>
                 <p>{record.summary}</p>
               </div>
-              <div className="recent-meta">
+              <div className="history-meta">
                 <span>{translateSentiment(record.sentiment)}</span>
-                <small>{translateRisk(record.risk_level)}</small>
-                <time>{new Date(record.created_at).toLocaleString("zh-CN")}</time>
+                <strong>{translateRisk(record.risk_level)}</strong>
+                <time>{formatDateTime(record.created_at)}</time>
               </div>
-            </div>
+            </article>
           ))}
         </div>
       )}
+    </section>
+  );
+}
+
+function MiniChart({ data }) {
+  const chartData = useMemo(() => {
+    const cleaned = data.map(normalizeCloseItem).filter((item) => Number.isFinite(item.close));
+    if (cleaned.length === 0) return [];
+
+    const values = cleaned.map((item) => item.close);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min || 1;
+
+    return cleaned.map((item, index) => ({
+      ...item,
+      label: item.date ? item.date.slice(5) : `D${index + 1}`,
+      height: 24 + ((item.close - min) / range) * 76
+    }));
+  }, [data]);
+
+  if (chartData.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="chart-card">
+      <div className="chart-title">
+        <span>近 7 日收盘趋势</span>
+        <small>用于辅助判断短期方向</small>
+      </div>
+      <div className="bar-chart">
+        {chartData.map((item) => (
+          <div className="bar-item" key={`${item.date}-${item.close}`} title={`${item.date || item.label}: ${item.close}`}>
+            <div className="bar-track">
+              <div className="bar-fill" style={{ height: `${item.height}%` }} />
+            </div>
+            <strong>{item.label}</strong>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PanelTitle({ title, subtitle, tag }) {
+  return (
+    <div className="panel-title">
+      <div>
+        <h2>{title}</h2>
+        {subtitle && <p>{subtitle}</p>}
+      </div>
+      {tag && <span>{tag}</span>}
+    </div>
+  );
+}
+
+function TrendBadge({ isPositive, value }) {
+  return (
+    <div className={isPositive ? "trend-badge up" : "trend-badge down"}>
+      {isPositive ? "+" : ""}
+      {value}%
     </div>
   );
 }
 
 function Metric({ label, value }) {
   return (
-    <div className="metric">
+    <div className="metric-card">
       <span>{label}</span>
       <strong>{value}</strong>
+    </div>
+  );
+}
+
+function SkeletonMarket() {
+  return (
+    <div className="skeleton-wrap">
+      <div className="skeleton-line wide" />
+      <div className="skeleton-price" />
+      <div className="skeleton-grid">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div className="skeleton-box" key={index} />
+        ))}
+      </div>
     </div>
   );
 }

@@ -3,7 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-import { fetchStockData } from "./stockService.js";
+import { fetchStockData, getStockCacheStatus } from "./stockService.js";
 import { analyzeStockData } from "./aiService.js";
 import { getRecentAnalysisRecords, isSupabaseConfigured, saveAnalysisRecord } from "./supabase.js";
 
@@ -45,13 +45,14 @@ if (!isProduction) {
 app.get("/api/health", (req, res) => {
   res.json({
     ok: true,
-    message: "AI 股票分析面板 API 正常运行。",
-    phase: "Phase 4 - Supabase 存储接入",
+    message: "AI Stock Insight API 正常运行。",
+    product: "AI Stock Insight",
     stockApiKeyLoaded: Boolean(process.env.ALPHA_VANTAGE_API_KEY),
     llmKeyLoaded: Boolean(process.env.LLM_API_KEY || process.env.OPENAI_API_KEY),
     llmBaseUrl: process.env.LLM_BASE_URL || process.env.OPENAI_BASE_URL || "https://token.sensenova.cn/v1",
     model: process.env.LLM_MODEL || process.env.OPENAI_MODEL || "sensenova-6.7-flash-lite",
-    supabaseConfigured: isSupabaseConfigured()
+    supabaseConfigured: isSupabaseConfigured(),
+    stockCache: getStockCacheStatus()
   });
 });
 
@@ -61,10 +62,18 @@ app.post("/api/stock/fetch", async (req, res) => {
     res.json(stockData);
   } catch (error) {
     const message = error.message || "获取股票数据失败。";
-    const statusCode = message.includes("请输入") || message.includes("格式") ? 400 : 500;
+    const statusCode = error.statusCode || (message.includes("请输入") || message.includes("格式") ? 400 : 500);
+
+    console.error("/api/stock/fetch failed", {
+      statusCode,
+      code: error.code,
+      message,
+      details: error.details
+    });
 
     res.status(statusCode).json({
-      error: message
+      error: message,
+      code: error.code || "STOCK_FETCH_FAILED"
     });
   }
 });

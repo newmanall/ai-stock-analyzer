@@ -1,467 +1,249 @@
-# 📈 AI 股票分析面板
+# AI Stock Insight - 智能股票分析面板
 
-> 使用 AI 大模型分析股票行情，返回结构化投资建议
+一个精简全栈 AI 股票分析应用。用户输入股票代码后，系统会获取最新日线行情，调用商汤 SenseNova 生成严格 JSON 格式的分析结果，并把行情数据与 AI 分析结果保存到 Supabase。
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Render](https://img.shields.io/badge/deployed%20on-render.com-green)](https://render.com)
+> 本项目用于技术演示与面试交付，不构成任何投资建议。
 
-## 🌐 在线访问
+## 在线访问
 
-**[点击访问在线版本](https://your-app.onrender.com)**
+Railway URL: https://your-railway-url.up.railway.app
 
-> ⚠️ 注意：这是演示链接，请替换为你的实际部署 URL
+GitHub Repo: https://github.com/your-name/ai-stock-dashboard
 
----
+## 功能亮点
 
-## ✨ 功能特点
+- 输入股票代码并获取最新市场行情
+- 展示收盘价、涨跌幅、成交量、日内振幅和近 7 日趋势
+- 调用商汤 SenseNova 生成 AI 分析
+- 强制 LLM 返回严格 JSON：`summary`、`sentiment`、`risk_level`
+- 后端执行 JSON 提取、`JSON.parse()` 和枚举校验
+- 将行情数据与 AI 分析结果写入 Supabase
+- 展示最近 5 条云端历史分析记录
+- 前端 UI 已整理为产品化展示，不再显示开发阶段信息
 
-| 功能 | 描述 |
-|------|------|
-| 📊 实时数据 | 调用 Alpha Vantage API 获取股票行情 |
-| 🤖 AI 智能分析 | GPT-4o-mini 分析数据，返回结构化 JSON |
-| 💾 云端存储 | 分析记录自动保存到 Supabase |
-| 📱 响应式设计 | 支持桌面和移动端 |
-| 📜 历史记录 | 查看过往分析记录 |
+## 技术栈
 
----
+- Frontend: React + Vite
+- Backend: Node.js + Express
+- Stock API: Alpha Vantage `TIME_SERIES_DAILY`
+- LLM API: 商汤 SenseNova OpenAI-compatible Chat Completions
+- Database: Supabase PostgreSQL
+- Deployment: Railway / Render
 
-## 🛠️ 技术栈
+## 系统流程
 
-| 类别 | 技术 |
-|------|------|
-| 前端 | React 18, Vite, Tailwind CSS |
-| 后端 | Node.js 20, Express 4 |
-| 数据库 | Supabase (PostgreSQL) |
-| AI | OpenAI GPT-4o-mini |
-| 股票数据 | Alpha Vantage API |
-| 部署 | Render.com (后端), Vercel (前端) |
+```txt
+用户输入股票代码
+  -> React 前端
+  -> Express 后端
+  -> Alpha Vantage 获取行情
+  -> SenseNova 生成 JSON 分析
+  -> 后端校验 JSON
+  -> Supabase 入库
+  -> 前端展示结果与历史记录
+```
 
----
+## 环境变量
 
-## 🚀 快速开始
+本地开发时，在项目根目录创建 `.env`：
 
-### 环境要求
+```env
+ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key
 
-- Node.js 20+
-- npm 或 pnpm
-- OpenAI API Key
-- Supabase 项目
-- Alpha Vantage API Key (可选)
+LLM_API_KEY=your_sensenova_key
+.LLM_BASE_URL=https://token.sensenova.cn/v1
+LLM_MODEL=sensenova-6.7-flash-lite
+LLM_RESPONSE_FORMAT_JSON=false
 
-### 本地开发
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+
+STOCK_CACHE_TTL_MS=3600000
+NODE_ENV=development
+```
+
+注意：
+
+- `.env` 已被 `.gitignore` 忽略，不要提交到 GitHub。
+- `SUPABASE_SERVICE_ROLE_KEY` 只能放后端环境变量，不能放到前端。
+- 商汤 API 使用 Bearer Token 鉴权；代码中通过 OpenAI SDK 的 `apiKey` 自动加入 `Authorization: Bearer ***`
+- 当前 SenseNova 文档截图没有明确展示 `response_format` 字段，因此默认 `LLM_RESPONSE_FORMAT_JSON=false`，通过强 Prompt + 后端校验保障 JSON 稳定性。
+
+## Supabase 建表 SQL
+
+进入 Supabase SQL Editor 执行：
+
+```sql
+create table if not exists stock_analyses (
+  id uuid primary key default gen_random_uuid(),
+  symbol text not null,
+  stock_data jsonb not null,
+  ai_analysis jsonb not null,
+  summary text not null,
+  sentiment text not null check (sentiment in ('Bullish', 'Neutral', 'Bearish')),
+  risk_level text not null check (risk_level in ('Low', 'Medium', 'High')),
+  created_at timestamptz default now()
+);
+
+create index if not exists stock_analyses_created_at_idx
+on stock_analyses (created_at desc);
+
+create index if not exists stock_analyses_symbol_idx
+on stock_analyses (symbol);
+```
+
+## 本地运行
 
 ```bash
-# 1. 克隆项目
-git clone https://github.com/yourname/ai-stock-analyzer.git
-cd ai-stock-analyzer
-
-# 2. 安装依赖
-npm install
-
-# 3. 配置环境变量
-cp server/.env.example server/.env
-# 编辑 .env 填入你的 API Key
-
-# 4. 启动开发服务器
+npm run install-all
 npm run dev
 ```
 
-前端访问: http://localhost:5173  
-后端 API: http://localhost:3000
+前端访问：
 
-### 环境变量
-
-```env
-# server/.env
-
-# OpenAI API (必需)
-OPENAI_API_KEY=sk-your-openai-key-here
-
-# Supabase (必需)
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_KEY=your-supabase-service-role-key
-
-# Alpha Vantage (可选，用于真实股票数据)
-ALPHA_VANTAGE_KEY=your-alpha-vantage-key
-
-# 服务器
-PORT=3000
-NODE_ENV=development
-
-# CORS
-FRONTEND_URL=http://localhost:5173
+```txt
+http://localhost:5173
 ```
 
----
+后端健康检查：
 
-## 📋 Prompt 设计
+```txt
+http://localhost:3000/api/health
+```
 
-### JSON 约束技巧
+健康检查示例：
 
-为了确保 LLM 只返回 JSON 格式，我采用了以下策略：
+```json
+{
+  "ok": true,
+  "message": "AI Stock Insight API 正常运行。",
+  "product": "AI Stock Insight",
+  "stockApiKeyLoaded": true,
+  "llmKeyLoaded": true,
+  "supabaseConfigured": true
+}
+```
 
-#### 1. 系统提示词约束
+## API 说明
 
-```typescript
-const systemPrompt = `
-你是一个只返回 JSON 的金融分析 API。
-严格遵守输出格式，不要添加任何额外内容。
+### POST /api/stock/fetch
+
+请求：
+
+```json
+{
+  "symbol": "AAPL"
+}
+```
+
+响应示例：
+
+```json
+{
+  "symbol": "AAPL",
+  "latestDate": "2026-05-15",
+  "previousDate": "2026-05-14",
+  "open": 297.9,
+  "high": 303.2,
+  "low": 296.52,
+  "close": 300.2,
+  "previousClose": 298.21,
+  "change": 1.99,
+  "changePercent": 0.67,
+  "dayRangePercent": 2.23,
+  "volume": ume": 54862836,
+  "recentCloses": [],
+  "cached": false,
+  "source": "Alpha Vantage TIME_SERIES_DAILY"
+}
+```
+
+### POST /api/stock/analyze
+
+请求：
+
+```json
+{
+  "symbol": "AAPL",
+  "stockData": {
+    "symbol": "AAPL",
+    "close": 300.2,
+    "changePercent": 0.67,
+    "recentCloses": []
+  }
+}
+```
+
+响应示例：
+
+```json
+{
+  "summary": "AAPL 近期收盘价保持上行，最新交易日涨幅为正，短期表现偏稳。需要继续关注成交量与波动区间变化。",
+  "sentiment": "Bullish",
+  "risk_level": "Medium",
+  "generated_at": "2026-05-18T00:00:00.000Z",
+  "saved_to_supabase": true,
+  "db_record": {
+    "id": "...",
+    "symbol": "AAPL",
+    "summary": "...",
+    "sentiment": "Bullish",
+    "risk_level": "Medium",
+    "created_at": "2026-05-18T00:00:00.000Z"
+  }
+}
+```
+
+### GET /api/analyses/recent
+
+返回最近 5 条 Supabase 分析记录。
+
+## Prompt 设计
+
+`server/aiService.js` 中的核心 Prompt：
+
+```js
+export const STOCK_ANALYSIS_SYSTEM_PROMPT = `
+你是一个金融市场数据分析助手。
+
+你必须只返回合法 JSON。
+不要返回 Markdown。
+不要使用代码块。
+不要输出解释性文字。
+不要添加多余字段。
+
+JSON 格式必须严格如下：
+{
+  "summary": "string",
+  "sentiment": "Bullish | Neutral | Bearish",
+  "risk_level": "Low | Medium | High"
+}
+
+字段规则：
+- summary：使用中文，总结股票近期表现，最多 2 句话。
+- sentiment：只能是 Bullish、Neutral、Bearish 三者之一。
+- risk_level：只能是 Low、Medium、High 三者之一。
+- 只能基于用户提供的行情数据判断。
+- 不要给出买入、卖出、持有等具体投资建议。
 `;
 ```
 
-#### 2. 使用 OpenAI JSON Mode
+## JSON 校验策略
 
-```typescript
-const completion = await openai.chat.completions.create({
-  model: 'gpt-4o-mini',
-  response_format: { type: 'json_object' },  // 强制返回 JSON
-  messages: [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: prompt }
-  ],
-  temperature: 0.3  // 低温度确保输出稳定
-});
-```
+后端不会直接相信模型输出，而是执行：
 
-#### 3. Prompt 中明确格式要求
+1. 从模型回复中提取 JSON 对象。
+2. 执行 `JSON.parse()`。
+3. 校验字段是否只包含 `summary`、`sentiment`、`risk_level`。
+4. 校验枚举值：
+   - `sentiment`: `Bullish` / `Neutral` / `Bearish`
+   - `risk_level`: `Low` / `Medium` / `High`
 
-```
-## 重要规则
-1. 只返回纯 JSON，不要有任何 Markdown 标记、解释文字或额外内容
-2. JSON 必须包含以下字段：summary, sentiment, risk_level, confidence_score
-3. sentiment 只能是：Bullish, Neutral, Bearish 之一
-4. risk_level 只能是：Low, Medium, High, Critical 之一
-5. confidence_score 是 0.00-1.00 之间的数字
-```
+## Railway 部署
 
-#### 4. 后处理容错
-
-```typescript
-function extractJson(text: string): AnalysisResult {
-  // 尝试直接解析
-  try {
-    return JSON.parse(text);
-  } catch {
-    // 提取 JSON 代码块
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    }
-  }
-  throw new Error('无法解析 AI 返回的 JSON');
-}
-```
-
-### Prompt 截图
-
-![Prompt 示例](./docs/prompt-example.png)
-
-> 截图说明：展示完整的 Prompt 模板，包括系统角色设定、格式约束和示例输出
-
----
-
-## 🐛 Debug 记录
-
-### 问题 1: CORS 错误
-
-**现象:**  
-前端请求后端时报 CORS 错误：
-```
-Access to fetch at 'http://localhost:3000/api/analyze' 
-from origin 'http://localhost:5173' has been blocked by CORS policy
-```
-
-**原因:**  
-Express 默认不允许跨域请求。
-
-**解决:**  
-```typescript
-// server/src/middleware/cors.ts
-import cors from 'cors';
-
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true,
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-```
-
-**验证:**  
-```bash
-# 前端请求成功
-✅ Response: 200 { success: true, data: {...} }
-```
-
----
-
-### 问题 2: LLM 返回非 JSON
-
-**现象:**  
-OpenAI 偶尔返回带 Markdown 的代码块：
-```
-```json
-{
-  "summary": "...",
-  ...
-}
-```
-```
-
-**原因:**  
-即使设置了 `response_format`，某些模型版本仍可能返回 Markdown 包装。
-
-**解决:**  
-```typescript
-// 方案 1: 使用 response_format (推荐)
-response_format: { type: 'json_object' }
-
-// 方案 2: 后处理提取
-function extractJson(text: string) {
-  // 移除 Markdown 代码块标记
-  let fixed = text.replace(/^```json\s*/i, '').replace(/```$/, '');
-  return JSON.parse(fixed);
-}
-
-// 方案 3: 正则提取
-const jsonMatch = text.match(/\{[\s\S]*\}/);
-if (jsonMatch) {
-  return JSON.parse(jsonMatch[0]);
-}
-```
-
-**验证:**  
-```bash
-# 测试 100 次，JSON 解析成功率 100%
-✅ 所有响应成功解析为 JSON
-```
-
----
-
-### 问题 3: Render 部署失败
-
-**现象:**  
-Build 成功但服务无法启动：
-```
-2024-05-18T10:00:00.000Z Build succeeded
-2024-05-18T10:00:01.000Z Error: Cannot find module 'dist/index.js'
-```
-
-**原因:**  
-Render 的 Start Command 配置错误，或 TypeScript 未编译。
-
-**解决:**  
-```json
-// package.json
-{
-  "scripts": {
-    "start": "node dist/index.js",
-    "build": "tsc"
-  }
-}
-```
-
-```bash
-# Render 配置
-Start Command: npm run start
-Build Command: npm run build
-```
-
-**额外检查:**  
-```bash
-# 确保 .env 文件在 Render 环境变量中配置
-# 确保 dist/ 目录在 .gitignore 中（不提交编译产物）
-```
-
-**验证:**  
-```bash
-# 访问健康检查接口
-curl https://your-app.onrender.com/health
-# 返回: { "status": "ok", "timestamp": "..." }
-```
-
----
-
-### 问题 4: Alpha Vantage API 限流
-
-**现象:**  
-```
-API call frequency limit reached. Please check our pricing plans.
-```
-
-**原因:**  
-免费 API 限制 5 次/分钟，500 次/天。
-
-**解决:**  
-```typescript
-// 添加内存缓存
-const cache = new Map<string, { data: StockData; timestamp: number }>();
-const CACHE_TTL = 5 * 60 * 1000;  // 5 分钟
-
-export async function getCachedStockData(symbol: string): Promise<StockData> {
-  const cached = cache.get(symbol);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.data;  // 返回缓存
-  }
-  
-  const data = await fetchStockData(symbol);
-  cache.set(symbol, { data, timestamp: Date.now() });
-  return data;
-}
-```
-
-**降级方案:**  
-```typescript
-// 如果没有 API Key，使用模拟数据
-if (!apiKey) {
-  console.warn('使用模拟数据');
-  return getMockStockData(symbol);
-}
-```
-
----
-
-## 📊 数据库设计
-
-```sql
--- 分析记录表
-CREATE TABLE analyses (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  stock_symbol TEXT NOT NULL,
-  stock_name TEXT,
-  current_price DECIMAL(10, 2),
-  price_change_percent DECIMAL(5, 2),
-  volume BIGINT,
-  market_cap BIGINT,
-  
-  -- AI 分析结果
-  analysis_summary TEXT NOT NULL,
-  sentiment TEXT NOT NULL CHECK (sentiment IN ('Bullish', 'Neutral', 'Bearish')),
-  risk_level TEXT NOT NULL CHECK (risk_level IN ('Low', 'Medium', 'High', 'Critical')),
-  confidence_score DECIMAL(3, 2),
-  
-  -- 原始数据快照
-  raw_data JSONB,
-  
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  user_ip TEXT
-);
-
--- 索引
-CREATE INDEX idx_analyses_symbol ON analyses(stock_symbol);
-CREATE INDEX idx_analyses_created ON analyses(created_at DESC);
-```
-
----
-
-## 📁 项目结构
-
-```
-ai-stock-analyzer/
-├── client/                    # 前端 (React + Vite)
-│   ├── src/
-│   │   ├── components/        # UI 组件
-│   │   ├── lib/               # 工具函数
-│   │   ├── types/             # TypeScript 类型
-│   │   └── App.tsx
-│   └── package.json
-│
-├── server/                    # 后端 (Node.js + Express)
-│   ├── src/
-│   │   ├── routes/            # API 路由
-│   │   ├── services/          # 业务服务
-│   │   ├── db/                # 数据库访问
-│   │   └── types/             # TypeScript 类型
-│   └── package.json
-│
-├── supabase/                  # Supabase 配置
-│   └── migrations/
-│
-├── docs/                      # 文档
-│   └── prompt-example.png
-│
-├── README.md
-└── .gitignore
-```
-
----
-
-## 🧪 API 测试
-
-### 分析股票
-
-```bash
-curl -X POST http://localhost:3000/api/analyze \
-  -H "Content-Type: application/json" \
-  -d '{"symbol": "AAPL"}'
-```
-
-**响应:**
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "stock_symbol": "AAPL",
-    "current_price": 178.52,
-    "analysis_summary": "苹果近期表现稳健...",
-    "sentiment": "Bullish",
-    "risk_level": "Low",
-    "confidence_score": 0.87
-  }
-}
-```
-
-### 获取历史
-
-```bash
-curl http://localhost:3000/api/history?limit=10
-```
-
-### 健康检查
-
-```bash
-curl http://localhost:3000/api/health
-```
-
----
-
-## 🔒 安全说明
-
-- ⚠️ **API Key 安全**: 不要将 API Key 提交到 GitHub
-- ✅ 使用 `.env` 文件 + `.gitignore`
-- ✅ Render.com 使用环境变量设置
-- ✅ Supabase RLS 策略控制数据访问
-
----
-
-## 📄 许可证
-
-MIT License - 仅供学习参考，不构成投资建议
-
----
-
-## 👨‍💻 作者
-
-[Your Name](https://github.com/yourname)
-
----
-
-## 🚀 Render 部署
-
-本项目支持 **Render 单服务部署**：Express 在生产模式下托管前端 `client/dist` 并提供 `/api/*` 后端接口。
-
-### Render 配置
-
-```txt
-Build Command: npm run install-all && npm run build
-Start Command: npm start
-```
-
-### 环境变量 (Render Environment)
+Railway Variables：
 
 ```env
-NODE_VERSION=20
 NODE_ENV=production
 ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key
 LLM_API_KEY=your_sensenova_key
@@ -470,10 +252,59 @@ LLM_MODEL=sensenova-6.7-flash-lite
 LLM_RESPONSE_FORMAT_JSON=false
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+STOCK_CACHE_TTL_MS=3600000
 ```
 
-详细部署步骤见 [`DEPLOY_RENDER.md`](./DEPLOY_RENDER.md)。
+Build Command：
 
----
+```bash
+npm run install-all && npm run build
+```
 
-> ⚠️ **免责声明**: 本应用仅供学习和演示目的，分析结果不构成投资建议。投资有风险，决策需谨慎。
+Start Command：
+
+```bash
+npm start
+```
+
+## Render 部署
+
+Render 配置与 Railway 类似：
+
+```txt
+Build Command: npm run install-all && npm run build
+Start Command: npm start
+```
+
+生产环境下 Express 会托管 `client/dist`，同时提供 `/api/*` 接口。
+
+## Debug 记录
+
+### Issue: AI 返回内容不是合法 JSON
+
+早期测试中，模型有时会返回 Markdown 代码块，例如：
+
+````txt
+```json
+{
+  "summary": "...",
+  "s": "Bullish",
+  "risk_level": "Medium"
+}
+```
+````
+
+这会导致 `JSON.parse()` 报错。
+
+### Fix
+
+我使用 AI 工具定位后，确认问题不是 `JSON.parse()` 本身，而是 Prompt 约束不够强。解决方式：
+
+1. 在 system prompt 中明确要求"只返回合法 JSON"。
+2. 禁止 Markdown、代码块和解释性文字。
+3. 固定 JSON 字段和枚举值。
+4. 后端增加 JSON 提取与字段校验。
+
+## 免责声明
+
+本项目仅用于技术演示与学习交流，不构成投资建议。
