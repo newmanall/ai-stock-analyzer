@@ -1,37 +1,6 @@
-# Dependencies
-node_modules/
-.pnp/
-.pnp.js
-
-# Build outputs
-dist/
-build/
-*.tsbuildinfo
-
-# Environment files
+node_modules
 .env
 .env.local
-.env.*.local
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# OS
+client/dist
 .DS_Store
-Thumbs.db
-
-# Logs
-logs/
-*.log
 npm-debug.log*
-
-# Test
-coverage/
-
-# Misc
-*.bak
-*.tmp
-.cache/

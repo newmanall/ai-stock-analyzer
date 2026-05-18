@@ -1,20 +1,12 @@
 {
-  "name": "ai-stock-analyzer",
-  "version": "1.0.0",
-  "description": "AI股票分析面板 - 使用LLM分析股票行情",
+  "name": "ai-stock-dashboard",
+  "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "client",
-    "server"
-  ],
   "scripts": {
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
-    "dev:client": "cd client && npm run dev",
-    "dev:server": "cd server && npm run dev",
-    "build": "npm run build:client && npm run build:server",
-    "build:client": "cd client && npm run build",
-    "build:server": "cd server && npm run build",
-    "start": "cd server && npm run start"
+    "install-all": "npm install && npm install --prefix client && npm install --prefix server",
+    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "build": "npm run build --prefix client",
+    "start": "npm start --prefix server"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
