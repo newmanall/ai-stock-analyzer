@@ -6,7 +6,7 @@
 
 ## 在线访问
 
-Railway URL: https://your-railway-url.up.railway.app
+Railway URL: https://ai-stock-dashboard-production.up.railway.app/
 
 GitHub Repo: https://github.com/your-name/ai-stock-dashboard
 
