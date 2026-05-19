@@ -64,7 +64,7 @@ NODE_ENV=development
 
 注意：
 
-- `.env` 已被 `.gitignore` 忽略，不要提交到 GitHub。
+- `.env` 已被 `.gitignore` 忽略。
 - `SUPABASE_SERVICE_ROLE_KEY` 只能放后端环境变量，不能放到前端。
 - 商汤 API 使用 Bearer Token 鉴权；代码中通过 OpenAI SDK 的 `apiKey` 自动加入 `Authorization: Bearer <key>`，不需要手写请求头。
 - 当前 SenseNova 文档截图没有明确展示 `response_format` 字段，因此默认 `LLM_RESPONSE_FORMAT_JSON=false`，通过强 Prompt + 后端校验保障 JSON 稳定性。
