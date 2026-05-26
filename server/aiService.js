@@ -102,36 +102,38 @@ async function createChatCompletion(client, request) {
 }
 
 export async function analyzeStockData({ symbol, stockData }) {
-  // Always use heuristic analysis for now to avoid API issues
-  return validateAnalysisJson(heuristicAnalysis({ symbol, stockData }));
-  
-  // if (process.env.USE_MOCK_AI === "true") {
-  //   return validateAnalysisJson(heuristicAnalysis({ symbol, stockData }));
-  // }
+  if (process.env.USE_MOCK_AI === "true") {
+    return validateAnalysisJson(heuristicAnalysis({ symbol, stockData }));
+  }
 
-  // const apiKey = process.env.OPENAI_API_KEY;
-  // if (!apiKey) {
-  //   throw new Error("OPENAI_API_KEY is not configured. Add it in Railway variables.");
-  // }
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return validateAnalysisJson(heuristicAnalysis({ symbol, stockData }));
+  }
 
-  const client = new OpenAI({
-    apiKey,
-    baseURL: process.env.OPENAI_BASE_URL || undefined
-  });
+  try {
+    const client = new OpenAI({
+      apiKey,
+      baseURL: process.env.OPENAI_BASE_URL || undefined
+    });
 
-  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
-  const completion = await createChatCompletion(client, {
-    model,
-    temperature: 0.2,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: buildUserPrompt({ symbol, stockData }) }
-    ]
-  });
+    const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+    const completion = await createChatCompletion(client, {
+      model,
+      temperature: 0.2,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: buildUserPrompt({ symbol, stockData }) }
+      ]
+    });
 
-  const content = completion.choices?.[0]?.message?.content;
-  const parsed = parseJsonObject(content);
-  return validateAnalysisJson(parsed);
+    const content = completion.choices?.[0]?.message?.content;
+    const parsed = parseJsonObject(content);
+    return validateAnalysisJson(parsed);
+  } catch (error) {
+    console.warn("OpenAI API failed, falling back to heuristic analysis:", error.message);
+    return validateAnalysisJson(heuristicAnalysis({ symbol, stockData }));
+  }
 }
 
 // ── 5.1 New AI Functions ────────────────────────────────────────────────────

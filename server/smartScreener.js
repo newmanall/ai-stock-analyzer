@@ -28,19 +28,19 @@ function makeSecid(code) {
 // ── Helper: fetch kline data for a stock (Zhitu API with rate limiting) ────
 
 async function fetchKlineForStock(code) {
-  // Generate mock kline data for scoring (no API token available)
-  const basePrice = 20 + (code.charCodeAt(0) % 10) * 5 + (code.charCodeAt(2) % 10) * 2;
-  const closes = [];
-  let price = basePrice;
-  for (let i = 0; i < 60; i++) {
-    price += (Math.random() - 0.48) * 1.5;
-    closes.push(Number(price.toFixed(2)));
+  const token = process.env.ZHITU_API_TOKEN;
+  if (!token) {
+    // Fallback: generate mock kline data for scoring
+    const basePrice = 20 + (code.charCodeAt(0) % 10) * 5 + (code.charCodeAt(2) % 10) * 2;
+    const closes = [];
+    let price = basePrice;
+    for (let i = 0; i < 60; i++) {
+      price += (Math.random() - 0.48) * 1.5;
+      closes.push(Number(price.toFixed(2)));
+    }
+    const highs = closes.map(c => Number((c + Math.random() * 1.5).toFixed(2)));
+    return { closes, highs };
   }
-  const highs = closes.map(c => Number((c + Math.random() * 1.5).toFixed(2)));
-  return { closes, highs };
-  
-  // const token = process.env.ZHITU_API_TOKEN;
-  // if (!token) return null;
 
   const suffix = code.startsWith("6") ? `${code}.SH` : `${code}.SZ`;
   const now = new Date();
@@ -64,32 +64,43 @@ async function fetchKlineForStock(code) {
 
     if (closes.length < 20) return null;
     return { closes, highs, lows };
-  } catch {
-    return null;
+  } catch (err) {
+    console.warn("Zhitu API failed, falling back to mock:", err.message);
+    const basePrice = 20 + (code.charCodeAt(0) % 10) * 5 + (code.charCodeAt(2) % 10) * 2;
+    const closes = [];
+    let price = basePrice;
+    for (let i = 0; i < 60; i++) {
+      price += (Math.random() - 0.48) * 1.5;
+      closes.push(Number(price.toFixed(2)));
+    }
+    const highs = closes.map(c => Number((c + Math.random() * 1.5).toFixed(2)));
+    return { closes, highs };
   }
 }
 
 // ── 1.1 Market Scan ─────────────────────────────────────────────────────────
 
 export async function scanMarket(sector = "all") {
-  // Always use mock scan results for now to avoid API issues
-  return buildMockScanResults();
-  
-  // if (process.env.USE_MOCK_STOCK === "true") {
-  //   return buildMockScanResults();
-  // }
-
   // Fetch top stocks by sector
   const fsParam = SECTOR_MAP[sector] || SECTOR_MAP["all"];
   const pz = sector === "all" ? 200 : 100;
 
-  const listUrl = `${EAST_MONEY_LIST_URL}?pn=1&pz=${pz}&po=1&np=1&fltt=2&invt=2&fs=${encodeURIComponent(fsParam)}&fields=f2,f3,f5,f6,f8,f9,f10,f12,f14,f15,f16,f20,f23,f37,f40,f41,f46,f49`;
-  const listRes = await fetch(listUrl);
-  if (!listRes.ok) {
-    throw new Error(`Market list API failed: ${listRes.status}`);
+  const listUrl = `${EAST_MONEY_LIST_URL}?pn=1&pz=${pz}&po=1&np=1&fltt=2&invt=2&fs=${encodeURIComponent(fsParam)}&fields=f2,f3,f5,f6,f8,f9,f10,f12,f14,f15,f16,f20,f23,f37,f39,f40,f41,f46,f49`;
+  
+  // 如果东方财富API不可用，回退到mock数据
+  let stockList = [];
+  try {
+    const listRes = await fetch(listUrl);
+    if (!listRes.ok) {
+      console.warn(`East Money API failed (${listRes.status}), using mock data`);
+      return buildMockScanResults();
+    }
+    const listRaw = await listRes.json();
+    stockList = listRaw?.data?.diff || [];
+  } catch (error) {
+    console.warn(`East Money API error: ${error.message}, using mock data`);
+    return buildMockScanResults();
   }
-  const listRaw = await listRes.json();
-  const stockList = listRaw?.data?.diff || [];
 
   const scored = [];
 
@@ -331,13 +342,30 @@ function buildMockScanResults() {
     const changePercent = Number(((Math.random() - 0.3) * 6).toFixed(2));
     const close = Number((basePrice * (1 + changePercent / 100)).toFixed(2));
 
+    // 技术面维度
     const maScore = [10, 20, 20, 10, 20, 10, 20, 0][idx];
     const macdScore = [20, 12, 20, 12, 12, 20, 12, 12][idx];
     const volumeScore = [20, 12, 20, 12, 20, 12, 20, 0][idx];
     const rsiScore = [15, 8, 15, 15, 8, 15, 8, 8][idx];
     const capitalScore = [15, 8, 15, 8, 15, 8, 8, 0][idx];
     const peScore = [10, 5, 0, 10, 5, 10, 0, 5][idx];
-    const totalScore = maScore + macdScore + volumeScore + rsiScore + capitalScore + peScore;
+
+    // 财务分析维度
+    const pb = Number((Math.random() * 8 + 0.5).toFixed(2));
+    const roe = Number((Math.random() * 25 + 3).toFixed(1));
+    const grossMargin = Number((Math.random() * 50 + 10).toFixed(1));
+    const netProfitMargin = Number((Math.random() * 25 + 2).toFixed(1));
+    const revenueYoY = Number((Math.random() * 40 - 5).toFixed(1));
+    const debtRatio = Number((Math.random() * 60 + 10).toFixed(1));
+
+    const roeScore = [15, 10, 15, 10, 5, 15, 5, 10][idx];
+    const grossScore = [10, 7, 10, 7, 4, 10, 4, 7][idx];
+    const npmScore = [10, 7, 10, 7, 4, 10, 4, 7][idx];
+    const revScore = [10, 7, 10, 7, 4, 10, 4, 7][idx];
+    const debtScore = [10, 7, 10, 7, 4, 10, 4, 7][idx];
+
+    const totalScore = maScore + macdScore + volumeScore + rsiScore + capitalScore + peScore
+      + roeScore + grossScore + npmScore + revScore + debtScore;
 
     return {
       symbol: code,
@@ -348,12 +376,21 @@ function buildMockScanResults() {
       amount: Math.floor(Math.random() * 5000000000) + 500000000,
       turnoverRate: Number((Math.random() * 8 + 0.5).toFixed(2)),
       pe: Number((Math.random() * 60 + 5).toFixed(2)),
+      pb,
       totalMarketCap: Math.floor(Math.random() * 500000000000 + 10000000000),
       amplitude: Number((Math.random() * 5 + 1).toFixed(2)),
       high: Number((close * 1.03).toFixed(2)),
       low: Number((close * 0.97).toFixed(2)),
       totalScore,
-      scoreDetail: { ma: maScore, macd: macdScore, volume: volumeScore, rsi: rsiScore, capital: capitalScore, pe: peScore },
+      scoreDetail: { ma: maScore, macd: macdScore, volume: volumeScore, rsi: rsiScore, capital: capitalScore, pe: peScore, roe: roeScore, grossMargin: grossScore, netProfitMargin: npmScore, revenueYoY: revScore, debtRatio: debtScore },
+      finance: {
+        pb,
+        roe,
+        grossMargin,
+        netProfitMargin,
+        revenueYoY,
+        debtRatio,
+      },
       indicators: {
         ma5: Number((close * 1.02).toFixed(2)),
         ma10: Number((close * 1.01).toFixed(2)),

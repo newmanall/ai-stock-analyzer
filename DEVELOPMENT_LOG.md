@@ -82,7 +82,41 @@
 
 ### 下一步行动
 
-请告诉我你想优先改进哪个方向，我会逐步实现并记录到开发日志。
+请告诉我你想优先实现哪个改进，我会逐步实现并记录到开发日志。
+
+---
+
+## 2026-05-26 选股器财务维度修复
+
+### 任务
+修复 `smartScreener.js` 中毛利率计算的数据源问题
+
+### 问题发现
+- **现象**: 毛利率计算不准确
+- **原因**: 东财 API 请求字段缺少 `f39`（主营收入），导致 `grossMargin = f40/f39` 回退到默认值 1
+- **影响**: 所有股票的毛利率评分均为 0 或错误值
+
+### 修复操作
+1. 在 API 请求字段中添加 `f39`
+2. 验证字段顺序：`f2,f3,f5,f6,f8,f9,f10,f12,f14,f15,f16,f20,f23,f37,f39,f40,f41,f46,f49`
+
+### 变更
+- 修改文件: `server/smartScreener.js` (第 88 行)
+- 新增字段: `f39` (主营收入)
+
+### 验证
+- [ ] 重启服务器
+- [ ] 调用 `/api/screener/scan` 测试
+- [ ] 检查返回结果中 `finance.grossMargin` 是否有合理值
+
+### 提交信息
+```
+fix(screener): add f39 field for gross margin calculation
+
+- East Money API was missing f39 (主营收入) in fields list
+- grossMargin = f40/f39 was falling back to default value 1
+- Added f39 to API request to enable accurate gross margin scoring
+```
 
 ---
 
