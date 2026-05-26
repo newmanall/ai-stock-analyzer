@@ -1,0 +1,105 @@
+import { Globe } from "lucide-react";
+
+function MiniSparkline({ values = [], height = 28, width = 120 }) {
+  if (!values.length) return null;
+  const nums = values.map(v => v.value !== undefined ? v.value : v);
+  const min = Math.min(...nums);
+  const max = Math.max(...nums);
+  const range = max - min || 1;
+  const points = nums.map((v, i) => {
+    const x = nums.length === 1 ? width / 2 : (i / (nums.length - 1)) * width;
+    const y = height - ((v - min) / range) * height;
+    return `${x},${y}`;
+  }).join(" ");
+  const isUp = nums.length >= 2 && nums[nums.length - 1] >= nums[0];
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="mini-sparkline" style={{ color: isUp ? "var(--up)" : "var(--down)" }}>
+      <polyline points={points} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export default function Northbound({ nbData, nbAI, onAnalyze }) {
+  if (!nbData) {
+    return (
+      <section className="card northbound">
+        <div className="card-header">
+          <h2><Globe size={18} /> 北向资金</h2>
+        </div>
+        <div className="empty-state">
+          <button className="btn-analyze" onClick={onAnalyze}>查看北向资金</button>
+          <p style={{ marginTop: "10px", fontSize: "0.82rem" }}>
+            实时追踪沪股通、深股通资金流入流出
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  const nd = nbData;
+  const totalSign = nd.todayTotalNetInflow >= 0 ? "+" : "";
+  const totalColor = nd.todayTotalNetInflow >= 0 ? "var(--up)" : "var(--down)";
+  const shSign = nd.todaySHNetInflow >= 0 ? "+" : "";
+  const szSign = nd.todaySZNetInflow >= 0 ? "+" : "";
+
+  const signalColorMap = {
+    "积极做多": "#22c55e",
+    "谨慎偏多": "#86efac",
+    "中性": "#94a3b8",
+    "偏空": "#f87171",
+  };
+
+  return (
+    <section className="card northbound">
+      <div className="card-header">
+        <h2><Globe size={18} /> 北向资金</h2>
+        <button className="btn-analyze btn-sm" onClick={onAnalyze}>刷新</button>
+      </div>
+
+      <div className="nb-grid">
+        <div className="nb-item">
+          <span className="nb-label">今日合计</span>
+          <strong style={{ color: totalColor }}>{totalSign}{nd.todayTotalNetInflow.toFixed(2)}亿</strong>
+        </div>
+        <div className="nb-item">
+          <span className="nb-label">沪股通</span>
+          <strong style={{ color: nd.todaySHNetInflow >= 0 ? "var(--up)" : "var(--down)" }}>
+            {shSign}{nd.todaySHNetInflow.toFixed(2)}亿
+          </strong>
+        </div>
+        <div className="nb-item">
+          <span className="nb-label">深股通</span>
+          <strong style={{ color: nd.todaySZNetInflow >= 0 ? "var(--up)" : "var(--down)" }}>
+            {szSign}{nd.todaySZNetInflow.toFixed(2)}亿
+          </strong>
+        </div>
+        <div className="nb-item">
+          <span className="nb-label">态度信号</span>
+          <strong style={{ color: signalColorMap[nd.signal] || "var(--text-primary)" }}>
+            {nd.signal}
+          </strong>
+        </div>
+      </div>
+
+      <div className="nb-trend">
+        <span>近5日趋势</span>
+        <MiniSparkline values={nd.recent5Days || []} height={36} width={150} />
+      </div>
+
+      <div className="nb-summary">
+        <span>{nd.summary}</span>
+        <span className="nb-consecutive">
+          连续{nd.consecutiveInflowDays}日{nd.consecutiveInflowDays >= 0 ? "净流入" : "净流出"}
+        </span>
+      </div>
+
+      {nbAI && (
+        <div className="ai-narrative">
+          <strong>AI 解读</strong>
+          <p>{nbAI.narrative || nbAI.summary}</p>
+        </div>
+      )}
+    </section>
+  );
+}

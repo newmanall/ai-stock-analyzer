@@ -1,0 +1,13 @@
+Supabase is not configured. Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.
+Supabase not available — returning empty list for getRecentAnalyses.
+Supabase is not configured. Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.
+Supabase not available — returning empty list for getRecentAnalyses.
+Sector API network error: fetch failed
+Sector API network error: fetch failed
+Supabase is not configured. Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.
+Supabase not available — skipping saveSearchHistory.
+Supabase is not configured. Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.
+Supabase not available — returning empty list for getRecentAnalyses.
+Sector API network error: fetch failed
+Supabase is not configured. Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.
+Supabase not available — skipping saveSearchHistory.

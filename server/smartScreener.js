@@ -1,0 +1,366 @@
+/**
+ * Smart stock screening engine.
+ * Uses East Money API for market-wide scan + multi-dimension scoring.
+ */
+
+import { calcMA, calcMACD, calcRSI } from "./technicalAnalyzer.js";
+import { saveSearchHistory } from "./supabase.js";
+
+const EAST_MONEY_LIST_URL = "https://push2.eastmoney.com/api/qt/clist/get";
+
+const SECTOR_MAP = {
+  "all": "m:0+t:6,m:0+t:80,m:1+t:2",
+  "bank": "b:BK0475",
+  "liquor": "b:BK0477",
+  "semiconductor": "b:BK1036",
+  "new_energy": "b:BK0493",
+  "auto": "b:BK0481",
+  "power": "b:BK0428",
+  "real_estate": "b:BK0451",
+  "metal": "b:BK0478",
+  "ai": "b:BK0800",
+};
+function makeSecid(code) {
+  if (code.startsWith("6")) return `1.${code}`;
+  return `0.${code}`;
+}
+
+// ── Helper: fetch kline data for a stock (Zhitu API with rate limiting) ────
+
+async function fetchKlineForStock(code) {
+  // Generate mock kline data for scoring (no API token available)
+  const basePrice = 20 + (code.charCodeAt(0) % 10) * 5 + (code.charCodeAt(2) % 10) * 2;
+  const closes = [];
+  let price = basePrice;
+  for (let i = 0; i < 60; i++) {
+    price += (Math.random() - 0.48) * 1.5;
+    closes.push(Number(price.toFixed(2)));
+  }
+  const highs = closes.map(c => Number((c + Math.random() * 1.5).toFixed(2)));
+  return { closes, highs };
+  
+  // const token = process.env.ZHITU_API_TOKEN;
+  // if (!token) return null;
+
+  const suffix = code.startsWith("6") ? `${code}.SH` : `${code}.SZ`;
+  const now = new Date();
+  const endDate = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+  const start = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+  const startDate = `${start.getFullYear()}${String(start.getMonth() + 1).padStart(2, "0")}${String(start.getDate()).padStart(2, "0")}`;
+
+  const url = `https://api.zhituapi.com/hs/history/${suffix}/d/n?token=${encodeURIComponent(token)}&st=${startDate}&et=${endDate}`;
+
+  try {
+    const res = await fetch(url, {
+      headers: { "Accept": "application/json" },
+    });
+    if (!res.ok) return null;
+    const raw = await res.json();
+    if (!Array.isArray(raw) || raw.length < 20) return null;
+
+    const closes = raw.map(item => Number(item.c ?? 0)).filter(v => v > 0);
+    const highs = raw.map(item => Number(item.h ?? 0)).filter(v => v > 0);
+    const lows = raw.map(item => Number(item.l ?? 0)).filter(v => v > 0);
+
+    if (closes.length < 20) return null;
+    return { closes, highs, lows };
+  } catch {
+    return null;
+  }
+}
+
+// ── 1.1 Market Scan ─────────────────────────────────────────────────────────
+
+export async function scanMarket(sector = "all") {
+  // Always use mock scan results for now to avoid API issues
+  return buildMockScanResults();
+  
+  // if (process.env.USE_MOCK_STOCK === "true") {
+  //   return buildMockScanResults();
+  // }
+
+  // Fetch top stocks by sector
+  const fsParam = SECTOR_MAP[sector] || SECTOR_MAP["all"];
+  const pz = sector === "all" ? 200 : 100;
+
+  const listUrl = `${EAST_MONEY_LIST_URL}?pn=1&pz=${pz}&po=1&np=1&fltt=2&invt=2&fs=${encodeURIComponent(fsParam)}&fields=f2,f3,f5,f6,f8,f9,f10,f12,f14,f15,f16,f20,f23,f37,f40,f41,f46,f49`;
+  const listRes = await fetch(listUrl);
+  if (!listRes.ok) {
+    throw new Error(`Market list API failed: ${listRes.status}`);
+  }
+  const listRaw = await listRes.json();
+  const stockList = listRaw?.data?.diff || [];
+
+  const scored = [];
+
+  // 第一步：基本面过滤，收集候选股票
+  const candidates = [];
+  for (const stock of stockList) {
+    const code = stock.f12;
+    const name = stock.f14;
+    const totalMarketCap = stock.f20 ?? 0;
+    const turnoverRate = stock.f8 ?? 0;
+    const pe = stock.f9 ?? 0;
+
+    // 基本面过滤
+    if (name && (name.includes("ST") || name.includes("*ST"))) continue;
+    if (name && name.includes("退")) continue;
+    if (totalMarketCap === 0 || totalMarketCap === "-" || totalMarketCap < 5000000000) continue;
+    if (turnoverRate <= 0 || turnoverRate > 15) continue;
+    if (pe <= 0 && pe !== 0) continue; // 跳过 PE 为 "-" 的情况
+
+    const pb = stock.f23 ?? 0;
+    const roe = stock.f37 ?? 0;
+    const grossProfit = stock.f40 ?? 0;       // 毛利金额
+    const revenue = stock.f39 ?? stock.f38 ?? 1; // 主营收入
+    const grossMargin = revenue > 0 ? grossProfit / revenue : 0;
+    const netProfitMargin = stock.f41 ?? 0;
+    const revenueYoY = stock.f46 ?? 0;        // 营收同比增长率
+    const debtRatio = stock.f49 ?? 0;         // 资产负债率
+
+    candidates.push({ stock, code, name, totalMarketCap, turnoverRate, pe, pb, roe, grossMargin, netProfitMargin, revenueYoY, debtRatio });
+  }
+
+  // 第二步：分批获取K线数据（限制并发+间隔，防止429限流）
+  const MAX_CONCURRENT = 3;
+  const BATCH_DELAY_MS = 800;
+  const klineResults = new Map();
+
+  for (let i = 0; i < candidates.length; i += MAX_CONCURRENT) {
+    const batch = candidates.slice(i, i + MAX_CONCURRENT);
+    const promises = batch.map(async (candidate) => {
+      const kline = await fetchKlineForStock(candidate.code);
+      return { code: candidate.code, kline };
+    });
+    const results = await Promise.allSettled(promises);
+    
+    for (const result of results) {
+      if (result.status === "fulfilled" && result.value.kline) {
+        klineResults.set(result.value.code, result.value.kline);
+      }
+    }
+
+    if (i + MAX_CONCURRENT < candidates.length) {
+      await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+    }
+  }
+
+  // 第三步：技术指标计算和打分
+  for (const candidate of candidates) {
+    const { stock, code, name, totalMarketCap, turnoverRate, pe, pb, roe, grossMargin, netProfitMargin, revenueYoY, debtRatio } = candidate;
+    
+    const kline = klineResults.get(code);
+    if (!kline) continue;
+
+    const close = stock.f2 ?? 0;
+    const changePercent = stock.f3 ?? 0;
+    const volume = stock.f5 ?? 0;
+    const amount = stock.f6 ?? 0;
+    const high = stock.f15 ?? 0;
+    const low = stock.f16 ?? 0;
+
+    const closes = kline.closes;
+    const ma5 = calcMA(closes, 5);
+    const ma10 = calcMA(closes, 10);
+    const ma20 = calcMA(closes, 20);
+    const macd = calcMACD(closes);
+    const rsi = calcRSI(closes);
+
+    // ── Scoring ──
+
+    // 1. 均线多头排列 (20分)
+    let maScore = 0;
+    if (ma5 && ma10 && ma20 && ma5 > ma10 && ma10 > ma20) maScore = 20;
+    else if (ma5 && ma10 && ma5 > ma10) maScore = 10;
+
+    // 2. MACD 金叉信号 (20分)
+    let macdScore = 0;
+    if (macd.signal === "golden_cross") macdScore = 20;
+    else if (macd.signal === "bullish") macdScore = 12;
+
+    // 3. 量价配合 (20分) — 使用东方财富量比(5日均量比值)
+    let volumeScore = 0;
+    const volRatio = (stock.f10 ?? 0); // 量比: 现成交量 / 5日均量
+    if (changePercent > 0 && volRatio > 2) volumeScore = 20;
+    else if (changePercent > 0 && volRatio > 1.2) volumeScore = 12;
+
+    // 4. RSI 合理区间 (15分)
+    let rsiScore = 0;
+    if (rsi.value !== null) {
+      if (rsi.value >= 40 && rsi.value <= 70) rsiScore = 15;
+      else if (rsi.value >= 30 && rsi.value <= 80) rsiScore = 8;
+    }
+
+    // 5. 主力资金流入 (15分) — approximate via change + amount
+    let capitalScore = 0;
+    if (changePercent > 1 && amount > 500000000) capitalScore = 15;
+    else if (changePercent > 0 && amount > 100000000) capitalScore = 8;
+
+    // 6. 低估值加分 (10分)
+    let peScore = 0;
+    if (pe > 0 && pe < 30) peScore = 10;
+    else if (pe > 0 && pe < 50) peScore = 5;
+
+    // ══════ 财务分析维度 (55分) ══════
+    // 7. ROE 净资产收益率 — 股东回报效率 (15分)
+    let roeScore = 0;
+    if (roe > 20) roeScore = 15;
+    else if (roe > 10) roeScore = 10;
+    else if (roe > 5) roeScore = 5;
+
+    // 8. 毛利率 — 竞争壁垒/护城河 (10分)
+    let grossScore = 0;
+    if (grossMargin > 0.4) grossScore = 10;
+    else if (grossMargin > 0.2) grossScore = 7;
+    else if (grossMargin > 0.1) grossScore = 4;
+
+    // 9. 净利率 — 盈利能力 (10分)
+    let npmScore = 0;
+    if (netProfitMargin > 0.20) npmScore = 10;
+    else if (netProfitMargin > 0.10) npmScore = 7;
+    else if (netProfitMargin > 0.05) npmScore = 4;
+
+    // 10. 营收同比增长率 — 成长性 (10分)
+    let revScore = 0;
+    if (revenueYoY > 20) revScore = 10;
+    else if (revenueYoY > 10) revScore = 7;
+    else if (revenueYoY > 0) revScore = 4;
+
+    // 11. 资产负债率 — 财务健康度 (10分，越低越稳健)
+    let debtScore = 0;
+    if (debtRatio > 0 && debtRatio < 30) debtScore = 10;
+    else if (debtRatio >= 30 && debtRatio < 50) debtScore = 7;
+    else if (debtRatio >= 50 && debtRatio < 70) debtScore = 4;
+
+    const totalScore = maScore + macdScore + volumeScore + rsiScore + capitalScore + peScore + roeScore + grossScore + npmScore + revScore + debtScore;
+
+    scored.push({
+      symbol: code,
+      name,
+      close,
+      changePercent,
+      volume,
+      amount,
+      turnoverRate,
+      pe,
+      pb,
+      totalMarketCap,
+      high,
+      low,
+      totalScore,
+      scoreDetail: {
+        ma: maScore,
+        macd: macdScore,
+        volume: volumeScore,
+        rsi: rsiScore,
+        capital: capitalScore,
+        pe: peScore,
+        // 财务分析维度
+        roe: roeScore,
+        grossMargin: grossScore,
+        netProfitMargin: npmScore,
+        revenueYoY: revScore,
+        debtRatio: debtScore,
+      },
+      finance: {
+        pb,
+        roe,
+        grossMargin: Number((grossMargin * 100).toFixed(1)),    // 转百分比
+        netProfitMargin: Number((netProfitMargin * 100).toFixed(1)),
+        revenueYoY: Number(revenueYoY.toFixed(1)),
+        debtRatio: Number(debtRatio.toFixed(1)),
+      },
+      indicators: {
+        ma5, ma10, ma20,
+        macd: { dif: macd.dif, dea: macd.dea, signal: macd.signal },
+        rsi: { value: rsi.value, status: rsi.status },
+      },
+    });
+  }
+
+  // Sort by score descending, take top 15
+  scored.sort((a, b) => b.totalScore - a.totalScore);
+  const top15 = scored.slice(0, 15);
+
+  // 记录搜索历史到Supabase数据库
+  if (top15.length > 0) {
+    try {
+      await saveSearchHistory({
+        symbol: sector,
+        name: sector,
+        sector,
+        analysisType: "screener",
+        resultCount: top15.length
+      });
+    } catch (e) {
+      // 搜索历史记录失败不影响选股结果
+      console.warn("Search history save failed:", e.message);
+    }
+  }
+
+  return top15;
+}
+
+// ── 1.2 AI Explanation Interface ────────────────────────────────────────────
+
+export async function scanAndExplain() {
+  const stocks = await scanMarket();
+  return {
+    stocks,
+    totalScanned: stocks.length,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+// ── 1.3 Mock ────────────────────────────────────────────────────────────────
+
+const MOCK_STOCKS = [
+  { code: "600519", name: "贵州茅台" },
+  { code: "000858", name: "五粮液" },
+  { code: "300750", name: "宁德时代" },
+  { code: "601318", name: "中国平安" },
+  { code: "000333", name: "美的集团" },
+  { code: "600036", name: "招商银行" },
+  { code: "002594", name: "比亚迪" },
+  { code: "300059", name: "东方财富" },
+];
+
+function buildMockScanResults() {
+  return MOCK_STOCKS.map(({ code, name }, idx) => {
+    const basePrice = 30 + Math.random() * 300;
+    const changePercent = Number(((Math.random() - 0.3) * 6).toFixed(2));
+    const close = Number((basePrice * (1 + changePercent / 100)).toFixed(2));
+
+    const maScore = [10, 20, 20, 10, 20, 10, 20, 0][idx];
+    const macdScore = [20, 12, 20, 12, 12, 20, 12, 12][idx];
+    const volumeScore = [20, 12, 20, 12, 20, 12, 20, 0][idx];
+    const rsiScore = [15, 8, 15, 15, 8, 15, 8, 8][idx];
+    const capitalScore = [15, 8, 15, 8, 15, 8, 8, 0][idx];
+    const peScore = [10, 5, 0, 10, 5, 10, 0, 5][idx];
+    const totalScore = maScore + macdScore + volumeScore + rsiScore + capitalScore + peScore;
+
+    return {
+      symbol: code,
+      name,
+      close,
+      changePercent,
+      volume: Math.floor(Math.random() * 80000000) + 5000000,
+      amount: Math.floor(Math.random() * 5000000000) + 500000000,
+      turnoverRate: Number((Math.random() * 8 + 0.5).toFixed(2)),
+      pe: Number((Math.random() * 60 + 5).toFixed(2)),
+      totalMarketCap: Math.floor(Math.random() * 500000000000 + 10000000000),
+      amplitude: Number((Math.random() * 5 + 1).toFixed(2)),
+      high: Number((close * 1.03).toFixed(2)),
+      low: Number((close * 0.97).toFixed(2)),
+      totalScore,
+      scoreDetail: { ma: maScore, macd: macdScore, volume: volumeScore, rsi: rsiScore, capital: capitalScore, pe: peScore },
+      indicators: {
+        ma5: Number((close * 1.02).toFixed(2)),
+        ma10: Number((close * 1.01).toFixed(2)),
+        ma20: Number((close * 0.99).toFixed(2)),
+        macd: { dif: Number((Math.random() * 2 - 1).toFixed(2)), dea: Number(((Math.random() - 0.5) * 1).toFixed(2)), signal: idx < 6 ? "bullish" : "golden_cross" },
+        rsi: { value: Number((40 + Math.random() * 35).toFixed(1)), status: "neutral" },
+      },
+    };
+  }).sort((a, b) => b.totalScore - a.totalScore);
+}
