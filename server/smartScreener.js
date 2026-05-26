@@ -401,3 +401,267 @@ function buildMockScanResults() {
     };
   }).sort((a, b) => b.totalScore - a.totalScore);
 }
+
+// ── 2. 深度金融分析（Anthropic Financial Services 框架集成）────────────────
+
+/**
+ * 行业分类映射
+ */
+const INDUSTRY_MAP = {
+  "白酒": { sector: "consumption", peers: ["600519", "000858", "000568", "600809", "002304"] },
+  "半导体": { sector: "technology", peers: ["600460", "002371", "603986", "002049", "688981"] },
+  "新能源": { sector: "energy", peers: ["300750", "002594", "601012", "300274", "600438"] },
+  "银行": { sector: "financial", peers: ["601318", "600036", "601288", "601939", "000001"] },
+  "医药": { sector: "healthcare", peers: ["600276", "300015", "600436", "000538", "603259"] },
+};
+
+/**
+ * 可比公司分析
+ * @param {string} targetSymbol - 目标股票代码
+ * @param {Array} candidates - 候选股票列表
+ */
+export async function buildCompsAnalysis(targetSymbol, candidates) {
+  const target = candidates.find(s => s.symbol === targetSymbol);
+  if (!target) {
+    throw new Error(`Target stock ${targetSymbol} not found in candidates`);
+  }
+
+  // 获取行业信息
+  const industryInfo = Object.values(INDUSTRY_MAP).find(info => 
+    info.peers.includes(targetSymbol)
+  );
+
+  // 筛选同行
+  const peers = candidates.filter(s => 
+    industryInfo?.peers.includes(s.symbol) && s.symbol !== targetSymbol
+  );
+
+  // 构建对比数据
+  const allStocks = [target, ...peers].slice(0, 5); // 最多 5 家公司
+
+  // 计算统计值
+  const calcStats = (key) => {
+    const values = allStocks.map(s => s.finance?.[key] ?? 0).filter(v => v > 0);
+    if (values.length < 2) return null;
+    values.sort((a, b) => a - b);
+    const n = values.length;
+    return {
+      max: values[n - 1],
+      percentile75: values[Math.floor(n * 0.75)],
+      median: values[Math.floor(n / 2)],
+      percentile25: values[Math.floor(n * 0.25)],
+      min: values[0],
+    };
+  };
+
+  return {
+    target: {
+      symbol: target.symbol,
+      name: target.name,
+      finance: target.finance,
+    },
+    peers: peers.map(s => ({
+      symbol: s.symbol,
+      name: s.name,
+      finance: s.finance,
+    })),
+    statistics: {
+      roe: calcStats("roe"),
+      grossMargin: calcStats("grossMargin"),
+      netProfitMargin: calcStats("netProfitMargin"),
+      revenueYoY: calcStats("revenueYoY"),
+      debtRatio: calcStats("debtRatio"),
+      pb: calcStats("pb"),
+    },
+    analysis: generateCompsAnalysisText(target, peers),
+  };
+}
+
+/**
+ * 生成可比公司分析文本
+ */
+function generateCompsAnalysisText(target, peers) {
+  if (!peers.length) {
+    return {
+      position: "无足够同行数据进行对比",
+      rationale: "建议扩大选股范围或选择其他行业",
+      riskFactors: ["数据不足"],
+    };
+  }
+
+  const targetGrossMargin = target.finance?.grossMargin ?? 0;
+  const peerMargins = peers.map(p => p.finance?.grossMargin ?? 0);
+  const avgMargin = peerMargins.reduce((a, b) => a + b, 0) / peerMargins.length;
+  const marginAdvantage = ((targetGrossMargin - avgMargin) / avgMargin * 100).toFixed(1);
+
+  const targetROE = target.finance?.roe ?? 0;
+  const peerROEs = peers.map(p => p.finance?.roe ?? 0);
+  const avgROE = peerROEs.reduce((a, b) => a + b, 0) / peerROEs.length;
+
+  return {
+    position: `${target.name} 毛利率 ${targetGrossMargin.toFixed(1)}%，${marginAdvantage > 0 ? '高于' : '低于'} 同行平均 ${avgMargin.toFixed(1)}%（差异 ${marginAdvantage}%）`,
+    rationale: `ROE ${targetROE.toFixed(1)}%，${targetROE > avgROE ? '优于' : '低于'} 同行平均 ${avgROE.toFixed(1)}%`,
+    riskFactors: marginAdvantage > 20 ? ["毛利率显著高于同行，需验证可持续性"] : ["无明显异常"],
+  };
+}
+
+/**
+ * 财务健康度评估
+ * @param {Object} stock - 股票数据
+ */
+export function assessFinancialHealth(stock) {
+  const f = stock.finance ?? {};
+  const score = {
+    profitability: 0,  // ROE + 毛利率 + 净利率
+    growth: 0,         // 营收增长
+    financialHealth: 0, // 负债率
+    efficiency: 0,     // PB 合理性
+    total: 0,
+    grade: "C",
+  };
+
+  // 盈利能力评分 (30%)
+  const roe = f.roe ?? 0;
+  const grossMargin = f.grossMargin ?? 0;
+  const npm = f.netProfitMargin ?? 0;
+  
+  if (roe > 20) score.profitability += 15;
+  else if (roe > 15) score.profitability += 10;
+  else if (roe > 10) score.profitability += 5;
+
+  if (grossMargin > 40) score.profitability += 10;
+  else if (grossMargin > 25) score.profitability += 7;
+  else if (grossMargin > 15) score.profitability += 4;
+
+  if (npm > 15) score.profitability += 5;
+  else if (npm > 10) score.profitability += 3;
+
+  // 成长性评分 (25%)
+  const revGrowth = f.revenueYoY ?? 0;
+  if (revGrowth > 20) score.growth = 25;
+  else if (revGrowth > 10) score.growth = 18;
+  else if (revGrowth > 5) score.growth = 12;
+  else if (revGrowth > 0) score.growth = 6;
+
+  // 财务健康评分 (25%)
+  const debtRatio = f.debtRatio ?? 0;
+  if (debtRatio < 30) score.financialHealth = 25;
+  else if (debtRatio < 50) score.financialHealth = 18;
+  else if (debtRatio < 70) score.financialHealth = 12;
+
+  // 估值合理性 (20%)
+  const pb = f.pb ?? 0;
+  if (pb > 0 && pb < 3) score.efficiency = 20;
+  else if (pb < 5) score.efficiency = 15;
+  else if (pb < 10) score.efficiency = 10;
+
+  // 总分
+  score.total = score.profitability + score.growth + score.financialHealth + score.efficiency;
+  
+  if (score.total >= 80) score.grade = "A";
+  else if (score.total >= 70) score.grade = "B";
+  else if (score.total >= 60) score.grade = "C";
+  else score.grade = "D";
+
+  return {
+    symbol: stock.symbol,
+    name: stock.name,
+    healthScore: score.total,
+    grade: score.grade,
+    categories: {
+      profitability: { score: score.profitability, max: 30 },
+      growth: { score: score.growth, max: 25 },
+      financialHealth: { score: score.financialHealth, max: 25 },
+      efficiency: { score: score.efficiency, max: 20 },
+    },
+    riskFactors: assessRiskFactors(f),
+    recommendation: generateHealthRecommendation(score),
+  };
+}
+
+/**
+ * 评估风险因素
+ */
+function assessRiskFactors(finance) {
+  const risks = [];
+  
+  if (finance.debtRatio > 60) risks.push("资产负债率偏高");
+  if (finance.grossMargin < 15) risks.push("毛利率偏低");
+  if (finance.revenueYoY < 0) risks.push("营收负增长");
+  if (finance.pb > 8) risks.push("估值偏高");
+  if (finance.roe < 5) risks.push("ROE 偏低");
+
+  return risks.length ? risks : ["暂无显著风险"];
+}
+
+/**
+ * 生成健康度建议
+ */
+function generateHealthRecommendation(score) {
+  if (score.grade === "A") return "财务健康度优秀，适合长期持有";
+  if (score.grade === "B") return "财务健康度良好，可关注";
+  if (score.grade === "C") return "财务健康度一般，需谨慎";
+  return "财务健康度较差，建议回避";
+}
+
+/**
+ * 深度分析接口
+ */
+export async function deepAnalyze(targetSymbol, candidates, sector) {
+  // 1. 可比公司分析
+  const comps = await buildCompsAnalysis(targetSymbol, candidates);
+  
+  // 2. 财务健康度评估
+  const healthAssessments = candidates.map(assessFinancialHealth);
+  
+  // 3. 生成综合建议
+  const targetHealth = healthAssessments.find(h => h.symbol === targetSymbol);
+  const recommendation = {
+    target: targetSymbol,
+    compsSummary: comps.analysis,
+    healthAssessment: targetHealth,
+    peerComparison: generatePeerComparison(comps, targetHealth),
+  };
+
+  return {
+    comps,
+    healthAssessments,
+    recommendation,
+  };
+}
+
+/**
+ * 生成同行对比摘要
+ */
+function generatePeerComparison(comps, health) {
+  const stats = comps.statistics;
+  const target = comps.target;
+  
+  const comparisons = [];
+  
+  if (stats.grossMargin) {
+    const targetRank = rankAmongPeers(target.finance.grossMargin, 
+      comps.peers.map(p => p.finance.grossMargin));
+    comparisons.push(`毛利率排名：第 ${targetRank} 位`);
+  }
+  
+  if (stats.roe) {
+    const targetRank = rankAmongPeers(target.finance.roe,
+      comps.peers.map(p => p.finance.roe));
+    comparisons.push(`ROE 排名：第 ${targetRank} 位`);
+  }
+
+  return {
+    summary: comparisons.join("；"),
+    grade: health.grade,
+    score: health.healthScore,
+  };
+}
+
+/**
+ * 计算排名
+ */
+function rankAmongPeers(targetValue, peerValues) {
+  const all = [...peerValues, targetValue].sort((a, b) => b - a);
+  return all.indexOf(targetValue) + 1;
+}

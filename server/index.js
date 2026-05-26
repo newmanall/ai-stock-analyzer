@@ -8,7 +8,7 @@ import { fetchAStockData, fetchMarketIndices } from "./aStockService.js";
 import { fetchSectorPerformance } from "./sectorService.js";
 import { analyzeStockData, explainSmartPick, explainTechnical, explainCapitalFlow, explainNorthbound, comprehensiveAnalysis } from "./aiService.js";
 import { normalizeSymbol, validateStockData, normalizeAStockCode, validateAStockData } from "./validators.js";
-import { scanMarket } from "./smartScreener.js";
+import { scanMarket, buildCompsAnalysis, assessFinancialHealth, deepAnalyze } from "./smartScreener.js";
 import { explainTechnical as techExplain } from "./technicalAnalyzer.js";
 import { analyzeCapitalFlow } from "./capitalFlowService.js";
 import { analyzeNorthbound } from "./northboundService.js";
@@ -351,8 +351,63 @@ app.post("/api/comprehensive", async (req, res) => {
   }
 });
 
-// ── 注册Research API路由 ──────────────────────────────────────────────────
+// ── 注册 Research API 路由 ──────────────────────────────────────────────────
 app.use("/api/research", researchApi);
+
+// ── 深度金融分析路由（Anthropic Financial Services 框架集成）───────────────
+
+app.post("/api/finance/comps", async (req, res) => {
+  try {
+    const { symbol, candidates } = req.body;
+    if (!symbol) {
+      return res.status(400).json({ error: "symbol is required" });
+    }
+    
+    // 如果没有传入 candidates，使用扫描结果
+    const stockCandidates = candidates || await scanMarket();
+    
+    const result = await buildCompsAnalysis(symbol, stockCandidates);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post("/api/finance/health-assessment", async (req, res) => {
+  try {
+    const { symbol, candidates } = req.body;
+    if (!symbol) {
+      return res.status(400).json({ error: "symbol is required" });
+    }
+    
+    const stockCandidates = candidates || await scanMarket();
+    const targetStock = stockCandidates.find(s => s.symbol === symbol);
+    
+    if (!targetStock) {
+      return res.status(404).json({ error: "Stock not found in candidates" });
+    }
+    
+    const result = assessFinancialHealth(targetStock);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.post("/api/finance/deep-analyze", async (req, res) => {
+  try {
+    const { symbol, candidates, sector } = req.body;
+    if (!symbol) {
+      return res.status(400).json({ error: "symbol is required" });
+    }
+    
+    const stockCandidates = candidates || await scanMarket();
+    const result = await deepAnalyze(symbol, stockCandidates, sector);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
 
 // ── Static files ────────────────────────────────────────────────────────────
 
