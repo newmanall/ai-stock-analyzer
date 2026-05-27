@@ -1,23 +1,34 @@
 import { Globe } from "lucide-react";
 
 function MiniSparkline({ values = [], height = 28, width = 120 }) {
-  if (!values.length) return null;
+  if (!values || !values.length) return null;
   const nums = values.map(v => v.value !== undefined ? v.value : v);
-  const min = Math.min(...nums);
-  const max = Math.max(...nums);
+  const validNums = nums.filter(v => v != null && typeof v === 'number');
+  if (validNums.length < 2) return null;
+  
+  const min = Math.min(...validNums);
+  const max = Math.max(...validNums);
   const range = max - min || 1;
-  const points = nums.map((v, i) => {
-    const x = nums.length === 1 ? width / 2 : (i / (nums.length - 1)) * width;
+  
+  const points = validNums.map((v, i) => {
+    const x = (i / (validNums.length - 1)) * width;
     const y = height - ((v - min) / range) * height;
     return `${x},${y}`;
   }).join(" ");
-  const isUp = nums.length >= 2 && nums[nums.length - 1] >= nums[0];
+
+  const isUp = validNums[validNums.length - 1] >= validNums[0];
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="mini-sparkline" style={{ color: isUp ? "var(--up)" : "var(--down)" }}>
       <polyline points={points} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
+}
+
+function formatMoney(value) {
+  if (value == null) return "--";
+  const sign = value >= 0 ? "+" : "";
+  return `${sign}${value.toFixed(2)}亿`;
 }
 
 export default function Northbound({ nbData, nbAI, onAnalyze }) {
@@ -50,6 +61,10 @@ export default function Northbound({ nbData, nbAI, onAnalyze }) {
     "偏空": "#f87171",
   };
 
+  const consecutiveLabel = nd.consecutiveInflowDays != null
+    ? (nd.consecutiveInflowDays >= 0 ? "净流入" : "净流出")
+    : "--";
+
   return (
     <section className="card northbound">
       <div className="card-header">
@@ -60,24 +75,24 @@ export default function Northbound({ nbData, nbAI, onAnalyze }) {
       <div className="nb-grid">
         <div className="nb-item">
           <span className="nb-label">今日合计</span>
-          <strong style={{ color: totalColor }}>{totalSign}{nd.todayTotalNetInflow.toFixed(2)}亿</strong>
+          <strong style={{ color: totalColor }}>{formatMoney(nd.todayTotalNetInflow)}</strong>
         </div>
         <div className="nb-item">
           <span className="nb-label">沪股通</span>
           <strong style={{ color: nd.todaySHNetInflow >= 0 ? "var(--up)" : "var(--down)" }}>
-            {shSign}{nd.todaySHNetInflow.toFixed(2)}亿
+            {formatMoney(nd.todaySHNetInflow)}
           </strong>
         </div>
         <div className="nb-item">
           <span className="nb-label">深股通</span>
           <strong style={{ color: nd.todaySZNetInflow >= 0 ? "var(--up)" : "var(--down)" }}>
-            {szSign}{nd.todaySZNetInflow.toFixed(2)}亿
+            {formatMoney(nd.todaySZNetInflow)}
           </strong>
         </div>
         <div className="nb-item">
           <span className="nb-label">态度信号</span>
           <strong style={{ color: signalColorMap[nd.signal] || "var(--text-primary)" }}>
-            {nd.signal}
+            {nd.signal ?? "--"}
           </strong>
         </div>
       </div>
@@ -88,9 +103,9 @@ export default function Northbound({ nbData, nbAI, onAnalyze }) {
       </div>
 
       <div className="nb-summary">
-        <span>{nd.summary}</span>
+        <span>{nd.summary ?? "--"}</span>
         <span className="nb-consecutive">
-          连续{nd.consecutiveInflowDays}日{nd.consecutiveInflowDays >= 0 ? "净流入" : "净流出"}
+          连续{nd.consecutiveInflowDays != null ? nd.consecutiveInflowDays : "--"}日{consecutiveLabel}
         </span>
       </div>
 

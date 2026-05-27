@@ -47,24 +47,35 @@ ${JSON.stringify(stockData, null, 2)}
 
 function heuristicAnalysis({ symbol, stockData }) {
   const closes = stockData.recentCloses || [];
-  const first = closes[0] ?? stockData.close;
-  const last = closes[closes.length - 1] ?? stockData.close;
-  const trend = last - first;
+  const first = closes.length > 0 ? closes[0] : null;
+  const last = closes.length > 0 ? closes[closes.length - 1] : null;
+  const trend = first != null && last != null ? last - first : null;
   const absoluteChange = Math.abs(Number(stockData.changePercent || 0));
 
   let sentiment = "Neutral";
-  if (trend > 0 && stockData.changePercent >= 0) sentiment = "Bullish";
-  if (trend < 0 && stockData.changePercent < 0) sentiment = "Bearish";
+  // 优先使用近期趋势，其次使用当日涨跌幅
+  if (trend != null) {
+    if (trend > 0 && stockData.changePercent >= 0) sentiment = "Bullish";
+    if (trend < 0 && stockData.changePercent < 0) sentiment = "Bearish";
+  } else {
+    // 无 K 线数据时，仅用当日涨跌幅判断
+    if (stockData.changePercent >= 2) sentiment = "Bullish";
+    if (stockData.changePercent <= -2) sentiment = "Bearish";
+  }
 
   let risk_level = "Medium";
   if (absoluteChange < 1) risk_level = "Low";
   if (absoluteChange > 3) risk_level = "High";
 
   const keyFactors = [];
-  if (trend > 1) keyFactors.push("近期价格持续上行，短线动能强劲");
-  if (trend < -1) keyFactors.push("近期价格持续下行，注意回调风险");
-  if (stockData.turnoverRate && stockData.turnoverRate > 5) keyFactors.push("换手率较高，市场交投活跃");
-  if (stockData.volume && typeof stockData.volume === "number" && stockData.volume > 50000000) keyFactors.push("成交量放大，资金关注度提升");
+  if (trend != null && trend > 1) keyFactors.push("近期价格持续上行，短线动能强劲");
+  if (trend != null && trend < -1) keyFactors.push("近期价格持续下行，注意回调风险");
+  if (stockData.turnoverRate != null && stockData.turnoverRate > 5) keyFactors.push("换手率较高，市场交投活跃");
+  if (stockData.turnoverRate != null && stockData.turnoverRate < 1) keyFactors.push("换手率较低，交投清淡");
+  // 成交量单位是股，5000 万股 = 50000000 股
+  if (stockData.volume != null && stockData.volume > 50000000) keyFactors.push("成交量放大，资金关注度提升");
+  if (stockData.pe != null && stockData.pe > 50) keyFactors.push("市盈率较高，估值偏贵");
+  if (stockData.pe != null && stockData.pe < 15) keyFactors.push("市盈率较低，估值合理");
 
   let suggestion = "观望";
   if (sentiment === "Bullish" && risk_level === "Low") suggestion = "短线关注";
@@ -74,8 +85,15 @@ function heuristicAnalysis({ symbol, stockData }) {
   const sentimentMap = { Bullish: "偏多", Neutral: "中性", Bearish: "偏空" };
   const sentimentCN = sentimentMap[sentiment] || sentiment.toLowerCase();
 
+  // 添加数据完整性提示
+  const dataNotes = [];
+  if (!closes.length) dataNotes.push("K 线数据暂不可用");
+  if (stockData.turnoverRate == null) dataNotes.push("换手率数据暂不可用");
+  if (stockData.pe == null) dataNotes.push("市盈率数据暂不可用");
+  const dataNote = dataNotes.length ? `（${dataNotes.join("、")}）` : "";
+
   return {
-    summary: `${symbol} 短线动能呈${sentimentCN}趋势，基于最新收盘价、日内涨跌幅及近期收盘价序列判断。此为模拟分析，不构成投资建议。`,
+    summary: `${symbol} 短线动能呈${sentimentCN}趋势，基于最新收盘价、日内涨跌幅${trend != null ? "及近期收盘价序列" : ""}判断${dataNote}。此为模拟分析，不构成投资建议。`,
     sentiment,
     risk_level,
     key_factors: keyFactors.slice(0, 3),
@@ -400,33 +418,45 @@ export async function explainNorthbound({ nbData, marketContext }) {
 
 // ── Comprehensive Analysis ──────────────────────────────────────────────────
 
-function heuristicComprehensiveAnalysis({ stockName, technical, capital, northbound, marketIndex }) {
+function heuristicComprehensiveAnalysis({ stockName, stockSymbol, technical, capital, northbound, marketIndex, financeData }) {
   const tech = technical || {};
   const cap = capital || {};
   const nb = northbound || {};
+  const finance = financeData || {};
 
   let bullish = 0, bearish = 0;
 
+  // 技术面评分
   if (tech.overallScore >= 60) bullish++;
   else if (tech.overallScore <= 40) bearish++;
 
+  // 资金面评分
   if (cap.flowTrend === "连续流入") bullish++;
   else if (cap.flowTrend === "连续流出") bearish++;
 
+  // 北向资金评分
   if (nb.signal === "积极做多" || nb.signal === "谨慎偏多") bullish++;
   else if (nb.signal === "偏空") bearish++;
 
+  // 金融分析评分（新增）
+  if (finance.health?.grade === "A" || finance.health?.grade === "B") bullish++;
+  else if (finance.health?.grade === "D") bearish++;
+
+  // 综合评估
   let overallAssessment = "Neutral";
   let confidence = "中";
-  if (bullish >= 2 && bearish === 0) { overallAssessment = "Bullish"; confidence = "高"; }
-  else if (bullish > bearish) { overallAssessment = "Bullish"; confidence = "中"; }
-  else if (bearish >= 2 && bullish === 0) { overallAssessment = "Bearish"; confidence = "高"; }
-  else if (bearish > bullish) { overallAssessment = "Bearish"; confidence = "中"; }
+  if (bullish >= 3 && bearish === 0) { overallAssessment = "Bullish"; confidence = "高"; }
+  else if (bullish >= 2 && bearish <= 1) { overallAssessment = "Bullish"; confidence = "中"; }
+  else if (bearish >= 3 && bullish === 0) { overallAssessment = "Bearish"; confidence = "高"; }
+  else if (bearish >= 2 && bullish <= 1) { overallAssessment = "Bearish"; confidence = "中"; }
 
   const keyLogicParts = [];
   if (tech.overallScore >= 60) keyLogicParts.push("技术面偏多");
   if (cap.flowTrend === "连续流入") keyLogicParts.push("资金持续流入");
   if (nb.signal?.includes("多")) keyLogicParts.push("北向资金偏多");
+  if (finance.health?.grade === "A") keyLogicParts.push("财务健康度优秀(A级)");
+  else if (finance.health?.grade === "B") keyLogicParts.push("财务健康度良好(B级)");
+  else if (finance.health?.grade === "D") keyLogicParts.push("财务健康度较差(D级)");
 
   const riskFactors = [];
   const entrySignals = [];
@@ -441,9 +471,22 @@ function heuristicComprehensiveAnalysis({ stockName, technical, capital, northbo
   }
   if (cap.volumePriceMatch?.includes("背离")) riskFactors.push(`资金面：${cap.volumePriceMatch}`);
 
+  // 金融风险分析（新增）
+  if (finance.health?.riskFactors) {
+    for (const risk of finance.health.riskFactors) {
+      if (!riskFactors.includes(risk) && risk !== "暂无显著风险") {
+        riskFactors.push(`财务：${risk}`);
+      }
+    }
+  }
+
+  // 同行对比定位（新增）
+  const peerPosition = finance.comps?.analysis?.position || "无同行对比数据";
+
   let summary = `${stockName || "该股"}综合评估${overallAssessment === "Bullish" ? "偏多" : overallAssessment === "Bearish" ? "偏空" : "中性"}。`;
   if (keyLogicParts.length) summary += `主要逻辑：${keyLogicParts.join("、")}。`;
   if (riskFactors.length) summary += `风险点：${riskFactors.slice(0, 3).join("；")}。`;
+  if (finance.health?.healthScore) summary += `财务健康度：${finance.health.grade}级(${finance.health.healthScore}分)。`;
 
   return {
     overall_assessment: overallAssessment,
@@ -452,16 +495,40 @@ function heuristicComprehensiveAnalysis({ stockName, technical, capital, northbo
     risk_factors: riskFactors.length ? riskFactors : ["暂无显著风险"],
     entry_signals: entrySignals.length ? entrySignals : ["暂无明确入场信号"],
     summary,
+    financial_highlights: finance.health?.grade === "A" ? ["ROE优秀", "毛利率领先"] : 
+                          finance.health?.grade === "B" ? ["财务稳健", "成长可期"] : [],
+    peer_position: peerPosition,
   };
 }
 
-export async function comprehensiveAnalysis({ stockName, technical, capital, northbound, marketIndex }) {
+export async function comprehensiveAnalysis({ stockName, stockSymbol, technical, capital, northbound, marketIndex, financeData }) {
+  // 如果开启了 mock AI 或没有 API key，使用启发式分析
   if (process.env.USE_MOCK_AI === "true" || !process.env.OPENAI_API_KEY) {
-    return heuristicComprehensiveAnalysis({ stockName, technical, capital, northbound, marketIndex });
+    return heuristicComprehensiveAnalysis({ stockName, stockSymbol, technical, capital, northbound, marketIndex, financeData });
   }
 
   const client = buildClient(process.env.OPENAI_API_KEY);
-  const sysPrompt = `你是A股综合研判分析师。结合技术面、资金面、北向资金三个维度，对一只股票做综合研判。
+  
+  // 构建金融分析上下文
+  const financeContext = financeData ? `
+金融分析（Anthropic Financial Services 框架）:
+- 财务健康度：${financeData.health?.grade || "N/A"} (评分: ${financeData.health?.healthScore || "N/A"}/100)
+- 盈利能力：${financeData.health?.categories?.profitability?.score || "N/A"}/30
+- 成长性：${financeData.health?.categories?.growth?.score || "N/A"}/25
+- 财务健康：${financeData.health?.categories?.financialHealth?.score || "N/A"}/25
+- 估值合理性：${financeData.health?.categories?.efficiency?.score || "N/A"}/20
+- 风险因素：${financeData.health?.riskFactors?.join(", ") || "无"}
+${financeData.comps ? `
+可比公司分析:
+- 毛利率：${financeData.target?.finance?.grossMargin || "N/A"}% (同行中位数: ${financeData.comps?.statistics?.grossMargin?.median || "N/A"}%)
+- ROE：${financeData.target?.finance?.roe || "N/A"}% (同行中位数: ${financeData.comps?.statistics?.roe?.median || "N/A"}%)
+- 估值：EV/EBITDA ${financeData.comps?.analysis?.position || "N/A"}
+- 同行排名：${financeData.comps?.analysis?.rationale || "N/A"}
+` : ""}` : "金融分析数据暂不可用";
+
+  const sysPrompt = `你是A股综合研判分析师，基于 Anthropic Financial Services 专业金融分析框架。
+结合技术面、资金面、北向资金、金融分析四个维度，对一只股票做综合研判。
+
 返回严格JSON：
 {
   "overall_assessment": "Bullish/Bearish/Neutral",
@@ -469,15 +536,29 @@ export async function comprehensiveAnalysis({ stockName, technical, capital, nor
   "key_logic": "一句话投资逻辑",
   "risk_factors": ["风险1","风险2"],
   "entry_signals": ["入场信号1"],
-  "summary": "综合论述段落"
-}`;
+  "summary": "综合论述段落",
+  "financial_highlights": ["财务亮点1","财务亮点2"],
+  "peer_position": "与同行对比定位"
+}
+
+金融分析框架核心原则：
+1. 数据源优先级：MCP > 金融API > 网络搜索
+2. 公式优先于硬编码
+3. 可比性第一：同行公司必须真正可比
+4. 四分位数统计：用中位数和四分位数而非平均值
+5. 估值合理性：EV/EBITDA、P/E、P/B 需与行业基准对比`;
 
   const completion = await createChatCompletion(client, {
     model: AI_MODEL(),
     temperature: 0.2,
     messages: [
       { role: "system", content: sysPrompt },
-      { role: "user", content: `股票：${stockName || "未知"}\n技术面：${JSON.stringify(technical)}\n资金面：${JSON.stringify(capital)}\n北向资金：${JSON.stringify(northbound)}\n大盘：${marketIndex || "正常"}` },
+      { role: "user", content: `股票：${stockName || "未知"} (${stockSymbol || "N/A"})
+技术面：${JSON.stringify(technical)}
+资金面：${JSON.stringify(capital)}
+北向资金：${JSON.stringify(northbound)}
+大盘：${marketIndex || "正常"}
+${financeContext}` },
     ],
   });
 

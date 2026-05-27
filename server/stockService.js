@@ -5,6 +5,10 @@
  * Format: v_usAAPL="200~苹果~AAPL.OQ~308.82~304.99~306.12~43670223~..."
  * Fields: status~name~symbol~current~prevClose~open~volume~...
  * Response encoding: GBK
+ *
+ * 腾讯美股接口字段映射:
+ * [0]=状态 [1]=名称 [2]=代码 [3]=现价 [4]=昨收 [5]=开盘 [6]=成交量
+ * [7]=最高 [8]=最低 [9]=? [10]=? ...
  */
 
 import { normalizeSymbol } from "./validators.js";
@@ -34,11 +38,10 @@ async function fetchGbkText(url) {
 }
 
 /**
- * Parse Tencent Finance response string.
- * @param {string} text - Raw response like v_usAAPL="200~苹果~AAPL.OQ~308.82~304.99~..."
- * @returns {object} Parsed fields
+ * Parse Tencent Finance US stock response string.
+ * Returns all available fields from the response.
  */
-function parseTencentResponse(text) {
+function parseTencentUSResponse(text) {
   if (!text || !text.includes("~")) {
     throw new Error("Invalid Tencent Finance response format");
   }
@@ -52,22 +55,22 @@ function parseTencentResponse(text) {
   const content = text.slice(start + 1, end);
   const parts = content.split("~");
 
-  if (parts.length < 6) {
-    throw new Error("Insufficient fields in Tencent Finance response");
-  }
-
-  const status = parts[0];
-  if (status !== "200") {
-    throw new Error(`Tencent Finance returned non-200 status: ${status}`);
+  if (parts.length < 10) {
+    throw new Error(`Insufficient fields in Tencent Finance US response: got ${parts.length}, expected at least 10`);
   }
 
   return {
+    status: parts[0],
     name: parts[1] || "",
     symbol: parts[2] || "",
     current: parseFloat(parts[3]) || 0,
     prevClose: parseFloat(parts[4]) || 0,
     open: parseFloat(parts[5]) || 0,
     volume: parseInt(parts[6]) || 0,
+    high: parseFloat(parts[7]) || 0,
+    low: parseFloat(parts[8]) || 0,
+    // Additional fields if available
+    changePercent: parts[9] ? parseFloat(parts[9]) : null,
   };
 }
 
@@ -79,7 +82,7 @@ export async function fetchStockData(inputSymbol) {
   const symbol = normalizeSymbol(inputSymbol);
   const url = `${TENCENT_BASE}us${symbol}`;
   const text = await fetchGbkText(url);
-  const data = parseTencentResponse(text);
+  const data = parseTencentUSResponse(text);
 
   const close = data.current;
   const previousClose = data.prevClose;
@@ -87,25 +90,69 @@ export async function fetchStockData(inputSymbol) {
     ? ((close - previousClose) / previousClose) * 100
     : 0;
 
-  const recentCloses = [
-    previousClose * 0.99,
-    previousClose * 1.005,
-    previousClose * 0.997,
-    previousClose * 1.002,
-    close,
-  ].map(v => Number(v.toFixed(2)));
+  // 真实 K 线数据：从智兔 API 获取
+  let recentCloses = [];
+  try {
+    recentCloses = await fetchUSStockHistory(symbol);
+  } catch (e) {
+    console.error(`[stockService] fetchUSStockHistory failed for ${symbol}: ${e.message}. Historical data unavailable.`);
+    recentCloses = [];
+  }
 
   return {
     symbol,
     latestDate: new Date().toISOString().slice(0, 10),
     open: Number(data.open.toFixed(2)),
-    high: Number((close * 1.01).toFixed(2)),
-    low: Number((close * 0.99).toFixed(2)),
+    high: Number(data.high.toFixed(2)),
+    low: Number(data.low.toFixed(2)),
     close: Number(close.toFixed(2)),
     volume: data.volume,
     changePercent: Number(changePercent.toFixed(2)),
     recentCloses,
+    // 真实数据，非估算
+    previousClose: Number(previousClose.toFixed(2)),
+    _raw: data,
   };
+}
+
+
+/**
+ * Fetch historical K-line close prices from Zhitu API for US stocks.
+ * @param {string} symbol - Stock ticker
+ */
+export async function fetchUSStockHistory(symbol) {
+  const token = process.env.ZHITU_API_TOKEN;
+  if (!token) {
+    throw new Error("ZHITU_API_TOKEN not configured");
+  }
+
+  const suffix = `${symbol}.OQ`; // NASDAQ format
+  const now = new Date();
+  const endDate = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+  const start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+  const startDate = `${start.getFullYear()}${String(start.getMonth() + 1).padStart(2, "0")}${String(start.getDate()).padStart(2, "0")}`;
+
+  const url = `https://api.zhituapi.com/us/history/${suffix}/d/n?token=***&st=${startDate}&et=${endDate}`;
+
+  try {
+    const res = await fetch(url, {
+      headers: { "Accept": "application/json" },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return null;
+    const raw = await res.json();
+    if (!Array.isArray(raw) || raw.length < 20) return null;
+
+    const closes = raw.map(item => Number(item.c ?? 0)).filter(v => v > 0);
+    const highs = raw.map(item => Number(item.h ?? 0)).filter(v => v > 0);
+    const lows = raw.map(item => Number(item.l ?? 0)).filter(v => v > 0);
+
+    if (closes.length < 20) return null;
+    return { closes, highs, lows };
+  } catch (err) {
+    console.warn(`Zhitu API failed for US ${symbol}: ${err.message}`);
+    return null;
+  }
 }
 
 /**
@@ -115,7 +162,6 @@ export async function fetchUSMarketIndices() {
   const indices = [
     { symbol: "IXIC", code: "^IXIC", name: "NASDAQ" },
     { symbol: "DJI", code: "^DJI", name: "Dow Jones" },
-    // S&P 500 not available via Tencent Finance
   ];
 
   const results = [];
@@ -124,7 +170,7 @@ export async function fetchUSMarketIndices() {
     try {
       const url = `${TENCENT_BASE}us${idx.symbol}`;
       const text = await fetchGbkText(url);
-      const data = parseTencentResponse(text);
+      const data = parseTencentUSResponse(text);
 
       const close = data.current;
       const previousClose = data.prevClose;
@@ -132,13 +178,13 @@ export async function fetchUSMarketIndices() {
         ? ((close - previousClose) / previousClose) * 100
         : 0;
 
-      const recentCloses = [
-        previousClose * 0.998,
-        previousClose * 1.001,
-        previousClose * 0.999,
-        previousClose * 1.003,
-        close,
-      ].map(v => Number(v.toFixed(2)));
+      let recentCloses = [];
+      try {
+        recentCloses = await fetchUSIndexHistory(idx.symbol);
+      } catch (e) {
+        console.error(`[stockService] fetchUSIndexHistory failed for ${idx.symbol}: ${e.message}. Historical data unavailable.`);
+        recentCloses = [];
+      }
 
       results.push({
         code: idx.code,
@@ -157,4 +203,33 @@ export async function fetchUSMarketIndices() {
   }
 
   return results;
+}
+
+/**
+ * Fetch historical data for US indices.
+ */
+async function fetchUSIndexHistory(symbol) {
+  const token = process.env.ZHITU_API_TOKEN;
+  if (!token) throw new Error("ZHITU_API_TOKEN not configured");
+
+  const suffix = `${symbol}.OQ`;
+  const now = new Date();
+  const endDate = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+  const start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+  const startDate = `${start.getFullYear()}${String(start.getMonth() + 1).padStart(2, "0")}${String(start.getDate()).padStart(2, "0")}`;
+
+  const url = `https://api.zhituapi.com/us/history/${suffix}/d/n?token=***&st=${startDate}&et=${endDate}`;
+
+  try {
+    const res = await fetch(url, {
+      headers: { "Accept": "application/json" },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return null;
+    const raw = await res.json();
+    if (!Array.isArray(raw) || raw.length < 20) return null;
+    return raw.map(item => Number(item.c ?? 0)).filter(v => v > 0);
+  } catch {
+    return null;
+  }
 }

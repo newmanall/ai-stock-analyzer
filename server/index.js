@@ -343,8 +343,8 @@ app.post("/api/northbound/explain", async (req, res) => {
 
 app.post("/api/comprehensive", async (req, res) => {
   try {
-    const { stockName, technical, capital, northbound, marketIndex } = req.body || {};
-    const result = await comprehensiveAnalysis({ stockName, technical, capital, northbound, marketIndex });
+    const { stockName, stockSymbol, technical, capital, northbound, marketIndex, financeData } = req.body || {};
+    const result = await comprehensiveAnalysis({ stockName, stockSymbol, technical, capital, northbound, marketIndex, financeData });
     res.json(result);
   } catch (error) {
     res.status(400).json({ error: error.message || "Failed comprehensive analysis." });

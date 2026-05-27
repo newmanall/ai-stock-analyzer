@@ -59,7 +59,7 @@ function formatNumber(value, decimals = 2) {
 }
 
 function formatVolume(value) {
-  if (!value) return "--";
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "--";
   const n = Number(value);
   if (n >= 1e8) return (n / 1e8).toFixed(2) + "亿";
   if (n >= 1e4) return (n / 1e4).toFixed(2) + "万";
@@ -67,7 +67,7 @@ function formatVolume(value) {
 }
 
 function formatMarketCap(value) {
-  if (!value) return "--";
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "--";
   const n = Number(value);
   if (n >= 1e12) return (n / 1e12).toFixed(2) + "万亿";
   if (n >= 1e8) return (n / 1e8).toFixed(2) + "亿";
@@ -163,7 +163,7 @@ export default function App() {
 
   const isLoading = status === "loading-stock" || status === "loading-astock";
   const isAnalyzing = status === "analyzing";
-  const isPositive = Number(stockData?.changePercent || 0) >= 0;
+  const isPositive = stockData?.changePercent != null && Number(stockData.changePercent) >= 0;
 
   async function loadRecent() {
     try {
@@ -454,19 +454,45 @@ export default function App() {
     setCompLoading(true);
     setError("");
     try {
-      // Fetch all three dimensions
-      const [tech, cap, nb] = await Promise.all([
+      // Fetch all four dimensions: technical, capital, northbound, finance
+      const [tech, cap, nb, finance] = await Promise.all([
         analyzeTechnical(stockData.symbol).catch(() => null),
         analyzeCapitalFlow(stockData.symbol).catch(() => null),
         analyzeNorthbound().catch(() => null),
+        // 同时调用金融分析 API
+        (async () => {
+          try {
+            // 先获取财务健康度
+            const healthRes = await fetch("/api/finance/health-assessment", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ symbol: stockData.symbol }),
+            });
+            const health = healthRes.ok ? await healthRes.json() : null;
+
+            // 再获取可比公司分析
+            const compsRes = await fetch("/api/finance/comps", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ symbol: stockData.symbol }),
+            });
+            const comps = compsRes.ok ? await compsRes.json() : null;
+
+            return { health, comps, target: health ? { symbol: health.symbol, finance: stockData.finance } : null };
+          } catch {
+            return { health: null, comps: null, target: null };
+          }
+        })(),
       ]);
 
       const comp = await comprehensiveAnalysis({
         stockName: stockData.name || stockData.symbol,
+        stockSymbol: stockData.symbol,
         technical: tech,
         capital: cap,
         northbound: nb,
         marketIndex: "上证指数",
+        financeData: finance,
       });
       setComprehensive(comp);
     } catch (err) {
@@ -595,17 +621,24 @@ export default function App() {
           </div>
           {indices.length > 0 ? (
             <div className="indices-row">
-              {visibleIndices.map((idx) => (
-                <div key={idx.code} className={`index-card ${idx.changePercent >= 0 ? "up" : "down"}`}>
-                  <span className="index-name">{idx.name}</span>
-                  <strong className="index-value">{formatNumber(idx.close)}</strong>
-                  <span className={`index-change ${idx.changePercent >= 0 ? "positive" : "negative"}`}>
-                    {idx.changePercent >= 0 ? "+" : ""}
-                    {formatNumber(idx.changePercent)}%
-                  </span>
-                  <Sparkline values={idx.recentCloses} height={32} />
-                </div>
-              ))}
+              {visibleIndices.map((idx) => {
+                const idxPositive = idx.changePercent != null && idx.changePercent >= 0;
+                return (
+                  <div key={idx.code} className={`index-card ${idxPositive ? "up" : "down"}`}>
+                    <span className="index-name">{idx.name}</span>
+                    <strong className="index-value">{formatNumber(idx.close)}</strong>
+                    {idx.changePercent != null ? (
+                      <span className={`index-change ${idxPositive ? "positive" : "negative"}`}>
+                        {idxPositive ? "+" : ""}
+                        {formatNumber(idx.changePercent)}%
+                      </span>
+                    ) : (
+                      <span className="index-change neutral">--</span>
+                    )}
+                    <Sparkline values={idx.recentCloses ?? []} height={32} />
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="empty-row">加载指数数据中…</div>
@@ -618,18 +651,19 @@ export default function App() {
             <div className="sectors-row">
               {topSectors.map((sec) => {
                 const pct = sec.changePercent;
-                const intensity = Math.min(Math.abs(pct) / 8, 1);
-                const bg =
-                  pct >= 0
-                    ? `rgba(239,68,68,${intensity * 0.3})`
-                    : `rgba(34,197,94,${intensity * 0.3})`;
-                const color = pct >= 0 ? "var(--up)" : "var(--down)";
+                const secPositive = pct != null && pct >= 0;
+                const intensity = pct != null ? Math.min(Math.abs(pct) / 8, 1) : 0;
+                const bg = pct != null
+                  ? (secPositive
+                      ? `rgba(239,68,68,${intensity * 0.3})`
+                      : `rgba(34,197,94,${intensity * 0.3})`)
+                  : "rgba(148,163,184,0.1)";
+                const color = pct != null ? (secPositive ? "var(--up)" : "var(--down)") : "var(--text-secondary)";
                 return (
                   <div key={sec.code} className="sector-tag" style={{ background: bg, color }}>
                     <span>{sec.name}</span>
                     <span className="sector-pct">
-                      {pct >= 0 ? "+" : ""}
-                      {formatNumber(pct)}%
+                      {pct != null ? (secPositive ? "+" : "") + formatNumber(pct) + "%" : "--"}
                     </span>
                   </div>
                 );
@@ -749,12 +783,16 @@ export default function App() {
                     {market === "usstock" ? "$" : "¥"}
                     {formatNumber(stockData.close)}
                   </strong>
-                  <span className={`change-badge ${isPositive ? "positive" : "negative"}`}>
-                    {isPositive ? "+" : ""}
-                    {formatNumber(stockData.changePercent)}%
-                  </span>
+                  {stockData.changePercent != null ? (
+                    <span className={`change-badge ${isPositive ? "positive" : "negative"}`}>
+                      {isPositive ? "+" : ""}
+                      {formatNumber(stockData.changePercent)}%
+                    </span>
+                  ) : (
+                    <span className="change-badge neutral">--</span>
+                  )}
                 </div>
-                <Sparkline values={stockData.recentCloses} height={64} />
+                <Sparkline values={stockData.recentCloses ?? []} height={64} />
               </div>
 
               <div className="stats-grid">
@@ -774,50 +812,97 @@ export default function App() {
                   <span>成交量</span>
                   <strong>{formatVolume(stockData.volume)}</strong>
                 </div>
+                {stockData.amplitude != null && (
+                  <div className="stat-item">
+                    <span>振幅</span>
+                    <strong>{formatNumber(stockData.amplitude)}%</strong>
+                  </div>
+                )}
+                {stockData.volumeRatio != null && (
+                  <div className="stat-item">
+                    <span>量比</span>
+                    <strong>{formatNumber(stockData.volumeRatio)}</strong>
+                  </div>
+                )}
               </div>
 
               {market === "astock" && (
                 <div className="stats-grid astock-extras">
-                  {stockData.limitUp !== undefined && (
+                  {stockData.limitUp != null && (
                     <div className="stat-item">
                       <span>涨停价</span>
                       <strong className="text-up">¥{formatNumber(stockData.limitUp)}</strong>
                     </div>
                   )}
-                  {stockData.limitDown !== undefined && (
+                  {stockData.limitDown != null && (
                     <div className="stat-item">
                       <span>跌停价</span>
                       <strong className="text-down">¥{formatNumber(stockData.limitDown)}</strong>
                     </div>
                   )}
-                  {stockData.pe !== undefined && (
+                  {stockData.changeYuan != null && (
+                    <div className="stat-item">
+                      <span>涨跌额</span>
+                      <strong className={stockData.changeYuan >= 0 ? "text-up" : "text-down"}>
+                        {stockData.changeYuan >= 0 ? "+" : ""}{formatNumber(stockData.changeYuan)}元
+                      </strong>
+                    </div>
+                  )}
+                  {stockData.pe != null && (
                     <div className="stat-item">
                       <span>市盈率</span>
                       <strong>{formatNumber(stockData.pe)}</strong>
                     </div>
                   )}
-                  {stockData.turnoverRate !== undefined && (
+                  {stockData.pb != null && (
+                    <div className="stat-item">
+                      <span>市净率</span>
+                      <strong>{formatNumber(stockData.pb)}</strong>
+                    </div>
+                  )}
+                  {stockData.turnoverRate != null && (
                     <div className="stat-item">
                       <span>换手率</span>
                       <strong>{formatNumber(stockData.turnoverRate)}%</strong>
                     </div>
                   )}
-                  {stockData.totalMarketCap !== undefined && (
+                  {stockData.totalMarketCap != null && (
                     <div className="stat-item">
                       <span>总市值</span>
                       <strong>{formatMarketCap(stockData.totalMarketCap)}</strong>
                     </div>
                   )}
-                  {stockData.amount !== undefined && (
+                  {stockData.amount != null && (
                     <div className="stat-item">
                       <span>成交额</span>
                       <strong>{formatVolume(stockData.amount)}</strong>
                     </div>
                   )}
+                  {stockData.amplitude != null && (
+                    <div className="stat-item">
+                      <span>振幅</span>
+                      <strong>{formatNumber(stockData.amplitude)}%</strong>
+                    </div>
+                  )}
+                  {stockData.volumeRatio != null && (
+                    <div className="stat-item">
+                      <span>量比</span>
+                      <strong>{formatNumber(stockData.volumeRatio)}</strong>
+                    </div>
+                  )}
+                  {stockData.dividendYield != null && (
+                    <div className="stat-item">
+                      <span>股息率</span>
+                      <strong>{formatNumber(stockData.dividendYield)}%</strong>
+                    </div>
+                  )}
                 </div>
               )}
 
-              <p className="date-note">数据日期: {stockData.latestDate}</p>
+              <p className="date-note">
+                数据日期: {stockData.latestDate}
+                {stockData._raw?.timestamp ? ` | 更新时间: ${stockData._raw.timestamp.slice(0, 4)}-${stockData._raw.timestamp.slice(4, 6)}-${stockData._raw.timestamp.slice(6, 8)} ${stockData._raw.timestamp.slice(8, 10)}:${stockData._raw.timestamp.slice(10, 12)}:${stockData._raw.timestamp.slice(12, 14)}` : ""}
+              </p>
 
               {market === "astock" && (
                 <button

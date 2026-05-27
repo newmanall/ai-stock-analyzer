@@ -100,6 +100,24 @@ export default function Comprehensive({ comprehensive, loading, onAnalyze }) {
         </div>
       )}
 
+      {comp.financial_highlights?.length > 0 && (
+        <div className="comp-finance">
+          <strong>💰 财务亮点（金融分析框架）:</strong>
+          <div className="signal-tags">
+            {comp.financial_highlights.map((hl, i) => (
+              <span key={i} className="signal-tag highlight">{hl}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {comp.peer_position && (
+        <div className="comp-peer">
+          <strong>📊 同行对比:</strong>
+          <p>{comp.peer_position}</p>
+        </div>
+      )}
+
       <div className="comp-summary">
         <strong>综合论述:</strong>
         <p>{comp.summary}</p>

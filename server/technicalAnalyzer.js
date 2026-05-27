@@ -357,20 +357,3 @@ export function explainTechnical(klineData, stockName = "") {
   };
 }
 
-// ── 2.5 Mock ────────────────────────────────────────────────────────────────
-
-export function buildMockKlineData(basePrice = 50) {
-  const len = 50;
-  const closes = [];
-  const highs = [];
-  const lows = [];
-  let price = basePrice;
-  for (let i = 0; i < len; i++) {
-    const change = (Math.random() - 0.48) * price * 0.04;
-    price = Math.max(price + change, 1);
-    closes.push(Number(price.toFixed(2)));
-    highs.push(Number((price * (1 + Math.random() * 0.03)).toFixed(2)));
-    lows.push(Number((price * (1 - Math.random() * 0.03)).toFixed(2)));
-  }
-  return { closes, highs, lows };
-}

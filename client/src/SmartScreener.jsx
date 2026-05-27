@@ -1,6 +1,16 @@
 import { Loader2, Sparkles } from "lucide-react";
 
 function ScoreBar({ score }) {
+  if (score == null) {
+    return (
+      <div className="score-bar">
+        <div className="score-bar-bg">
+          <div className="score-bar-fill" style={{ width: "0%", background: "#94a3b8" }} />
+        </div>
+        <span className="score-bar-text">--</span>
+      </div>
+    );
+  }
   const percent = Math.min(Math.max(score, 0), 100);
   const color = percent >= 80 ? "#22c55e" : percent >= 60 ? "#f59e0b" : "#ef4444";
   return (
@@ -14,6 +24,13 @@ function ScoreBar({ score }) {
 }
 
 function ScoreTag({ label, value, max = 20 }) {
+  if (value == null) {
+    return (
+      <span className="score-tag" style={{ background: "#94a3b820", color: "#94a3b8" }}>
+        {label}: --
+      </span>
+    );
+  }
   const percent = (value / max) * 100;
   let color = "#ef4444";
   if (percent >= 80) color = "#22c55e";
@@ -95,14 +112,14 @@ export default function SmartScreener({
               </div>
 
               <div className="screener-score">
-                <ScoreBar score={stock.totalScore} />
+                <ScoreBar score={stock.totalScore ?? null} />
                 <div className="score-tags">
-                  <ScoreTag label="均线" value={stock.scoreDetail?.ma || 0} />
-                  <ScoreTag label="MACD" value={stock.scoreDetail?.macd || 0} />
-                  <ScoreTag label="量价" value={stock.scoreDetail?.volume || 0} />
-                  <ScoreTag label="RSI" value={stock.scoreDetail?.rsi || 0} />
-                  <ScoreTag label="资金" value={stock.scoreDetail?.capital || 0} />
-                  <ScoreTag label="估值" value={stock.scoreDetail?.pe || 0} max={10} />
+                  <ScoreTag label="均线" value={stock.scoreDetail?.ma ?? null} />
+                  <ScoreTag label="MACD" value={stock.scoreDetail?.macd ?? null} />
+                  <ScoreTag label="量价" value={stock.scoreDetail?.volume ?? null} />
+                  <ScoreTag label="RSI" value={stock.scoreDetail?.rsi ?? null} />
+                  <ScoreTag label="资金" value={stock.scoreDetail?.capital ?? null} />
+                  <ScoreTag label="估值" value={stock.scoreDetail?.pe ?? null} max={10} />
                 </div>
               </div>
 
@@ -125,18 +142,24 @@ export default function SmartScreener({
               <div className="screener-stats">
                 <div className="stat">
                   <span>最新价</span>
-                  <strong>¥{stock.close.toFixed(2)}</strong>
+                  <strong>¥{stock.close != null ? stock.close.toFixed(2) : "--"}</strong>
                 </div>
                 <div className="stat">
                   <span>涨跌幅</span>
-                  <strong className={stock.changePercent >= 0 ? "text-up" : "text-down"}>
-                    {stock.changePercent >= 0 ? "+" : ""}{stock.changePercent.toFixed(2)}%
+                  <strong className={stock.changePercent != null && stock.changePercent >= 0 ? "text-up" : "text-down"}>
+                    {stock.changePercent != null ? (stock.changePercent >= 0 ? "+" : "") + stock.changePercent.toFixed(2) + "%" : "--"}
                   </strong>
                 </div>
                 <div className="stat">
                   <span>换手率</span>
-                  <strong>{stock.turnoverRate.toFixed(2)}%</strong>
+                  <strong>{stock.turnoverRate != null ? `${stock.turnoverRate.toFixed(2)}%` : "--"}</strong>
                 </div>
+                {stock.amplitude != null && (
+                  <div className="stat">
+                    <span>振幅</span>
+                    <strong>{stock.amplitude.toFixed(2)}%</strong>
+                  </div>
+                )}
               </div>
             </div>
           );

@@ -30,16 +30,8 @@ function makeSecid(code) {
 async function fetchKlineForStock(code) {
   const token = process.env.ZHITU_API_TOKEN;
   if (!token) {
-    // Fallback: generate mock kline data for scoring
-    const basePrice = 20 + (code.charCodeAt(0) % 10) * 5 + (code.charCodeAt(2) % 10) * 2;
-    const closes = [];
-    let price = basePrice;
-    for (let i = 0; i < 60; i++) {
-      price += (Math.random() - 0.48) * 1.5;
-      closes.push(Number(price.toFixed(2)));
-    }
-    const highs = closes.map(c => Number((c + Math.random() * 1.5).toFixed(2)));
-    return { closes, highs };
+    console.error(`[smartScreener] ZHITU_API_TOKEN not configured for ${code}. K-line data unavailable.`);
+    return null;
   }
 
   const suffix = code.startsWith("6") ? `${code}.SH` : `${code}.SZ`;
@@ -48,33 +40,34 @@ async function fetchKlineForStock(code) {
   const start = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
   const startDate = `${start.getFullYear()}${String(start.getMonth() + 1).padStart(2, "0")}${String(start.getDate()).padStart(2, "0")}`;
 
-  const url = `https://api.zhituapi.com/hs/history/${suffix}/d/n?token=${encodeURIComponent(token)}&st=${startDate}&et=${endDate}`;
+  const url = `https://api.zhituapi.com/hs/history/${suffix}/d/n?token=${token}&st=${startDate}&et=${endDate}`;
 
   try {
     const res = await fetch(url, {
       headers: { "Accept": "application/json" },
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error(`[smartScreener] Zhitu API returned ${res.status} for ${suffix}. K-line data unavailable.`);
+      return null;
+    }
     const raw = await res.json();
-    if (!Array.isArray(raw) || raw.length < 20) return null;
+    if (!Array.isArray(raw) || raw.length < 20) {
+      console.error(`[smartScreener] Zhitu API returned insufficient data (${raw?.length ?? 0} items) for ${suffix}. K-line data unavailable.`);
+      return null;
+    }
 
     const closes = raw.map(item => Number(item.c ?? 0)).filter(v => v > 0);
     const highs = raw.map(item => Number(item.h ?? 0)).filter(v => v > 0);
     const lows = raw.map(item => Number(item.l ?? 0)).filter(v => v > 0);
 
-    if (closes.length < 20) return null;
+    if (closes.length < 20) {
+      console.error(`[smartScreener] Valid closes < 20 for ${suffix}. K-line data unavailable.`);
+      return null;
+    }
     return { closes, highs, lows };
   } catch (err) {
-    console.warn("Zhitu API failed, falling back to mock:", err.message);
-    const basePrice = 20 + (code.charCodeAt(0) % 10) * 5 + (code.charCodeAt(2) % 10) * 2;
-    const closes = [];
-    let price = basePrice;
-    for (let i = 0; i < 60; i++) {
-      price += (Math.random() - 0.48) * 1.5;
-      closes.push(Number(price.toFixed(2)));
-    }
-    const highs = closes.map(c => Number((c + Math.random() * 1.5).toFixed(2)));
-    return { closes, highs };
+    console.error(`[smartScreener] Zhitu API error for ${suffix}: ${err.message}. K-line data unavailable.`);
+    return null;
   }
 }
 
@@ -87,19 +80,19 @@ export async function scanMarket(sector = "all") {
 
   const listUrl = `${EAST_MONEY_LIST_URL}?pn=1&pz=${pz}&po=1&np=1&fltt=2&invt=2&fs=${encodeURIComponent(fsParam)}&fields=f2,f3,f5,f6,f8,f9,f10,f12,f14,f15,f16,f20,f23,f37,f39,f40,f41,f46,f49`;
   
-  // 如果东方财富API不可用，回退到mock数据
+  // 如果东方财富API不可用，返回空数组并记录错误
   let stockList = [];
   try {
     const listRes = await fetch(listUrl);
     if (!listRes.ok) {
-      console.warn(`East Money API failed (${listRes.status}), using mock data`);
-      return buildMockScanResults();
+      console.error(`[smartScreener] East Money API failed (${listRes.status}) for sector=${sector}. Scan results unavailable.`);
+      return [];
     }
     const listRaw = await listRes.json();
     stockList = listRaw?.data?.diff || [];
   } catch (error) {
-    console.warn(`East Money API error: ${error.message}, using mock data`);
-    return buildMockScanResults();
+    console.error(`[smartScreener] East Money API error for sector=${sector}: ${error.message}. Scan results unavailable.`);
+    return [];
   }
 
   const scored = [];
@@ -324,83 +317,6 @@ export async function scanAndExplain() {
 }
 
 // ── 1.3 Mock ────────────────────────────────────────────────────────────────
-
-const MOCK_STOCKS = [
-  { code: "600519", name: "贵州茅台" },
-  { code: "000858", name: "五粮液" },
-  { code: "300750", name: "宁德时代" },
-  { code: "601318", name: "中国平安" },
-  { code: "000333", name: "美的集团" },
-  { code: "600036", name: "招商银行" },
-  { code: "002594", name: "比亚迪" },
-  { code: "300059", name: "东方财富" },
-];
-
-function buildMockScanResults() {
-  return MOCK_STOCKS.map(({ code, name }, idx) => {
-    const basePrice = 30 + Math.random() * 300;
-    const changePercent = Number(((Math.random() - 0.3) * 6).toFixed(2));
-    const close = Number((basePrice * (1 + changePercent / 100)).toFixed(2));
-
-    // 技术面维度
-    const maScore = [10, 20, 20, 10, 20, 10, 20, 0][idx];
-    const macdScore = [20, 12, 20, 12, 12, 20, 12, 12][idx];
-    const volumeScore = [20, 12, 20, 12, 20, 12, 20, 0][idx];
-    const rsiScore = [15, 8, 15, 15, 8, 15, 8, 8][idx];
-    const capitalScore = [15, 8, 15, 8, 15, 8, 8, 0][idx];
-    const peScore = [10, 5, 0, 10, 5, 10, 0, 5][idx];
-
-    // 财务分析维度
-    const pb = Number((Math.random() * 8 + 0.5).toFixed(2));
-    const roe = Number((Math.random() * 25 + 3).toFixed(1));
-    const grossMargin = Number((Math.random() * 50 + 10).toFixed(1));
-    const netProfitMargin = Number((Math.random() * 25 + 2).toFixed(1));
-    const revenueYoY = Number((Math.random() * 40 - 5).toFixed(1));
-    const debtRatio = Number((Math.random() * 60 + 10).toFixed(1));
-
-    const roeScore = [15, 10, 15, 10, 5, 15, 5, 10][idx];
-    const grossScore = [10, 7, 10, 7, 4, 10, 4, 7][idx];
-    const npmScore = [10, 7, 10, 7, 4, 10, 4, 7][idx];
-    const revScore = [10, 7, 10, 7, 4, 10, 4, 7][idx];
-    const debtScore = [10, 7, 10, 7, 4, 10, 4, 7][idx];
-
-    const totalScore = maScore + macdScore + volumeScore + rsiScore + capitalScore + peScore
-      + roeScore + grossScore + npmScore + revScore + debtScore;
-
-    return {
-      symbol: code,
-      name,
-      close,
-      changePercent,
-      volume: Math.floor(Math.random() * 80000000) + 5000000,
-      amount: Math.floor(Math.random() * 5000000000) + 500000000,
-      turnoverRate: Number((Math.random() * 8 + 0.5).toFixed(2)),
-      pe: Number((Math.random() * 60 + 5).toFixed(2)),
-      pb,
-      totalMarketCap: Math.floor(Math.random() * 500000000000 + 10000000000),
-      amplitude: Number((Math.random() * 5 + 1).toFixed(2)),
-      high: Number((close * 1.03).toFixed(2)),
-      low: Number((close * 0.97).toFixed(2)),
-      totalScore,
-      scoreDetail: { ma: maScore, macd: macdScore, volume: volumeScore, rsi: rsiScore, capital: capitalScore, pe: peScore, roe: roeScore, grossMargin: grossScore, netProfitMargin: npmScore, revenueYoY: revScore, debtRatio: debtScore },
-      finance: {
-        pb,
-        roe,
-        grossMargin,
-        netProfitMargin,
-        revenueYoY,
-        debtRatio,
-      },
-      indicators: {
-        ma5: Number((close * 1.02).toFixed(2)),
-        ma10: Number((close * 1.01).toFixed(2)),
-        ma20: Number((close * 0.99).toFixed(2)),
-        macd: { dif: Number((Math.random() * 2 - 1).toFixed(2)), dea: Number(((Math.random() - 0.5) * 1).toFixed(2)), signal: idx < 6 ? "bullish" : "golden_cross" },
-        rsi: { value: Number((40 + Math.random() * 35).toFixed(1)), status: "neutral" },
-      },
-    };
-  }).sort((a, b) => b.totalScore - a.totalScore);
-}
 
 // ── 2. 深度金融分析（Anthropic Financial Services 框架集成）────────────────
 

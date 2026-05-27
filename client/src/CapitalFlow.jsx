@@ -1,24 +1,39 @@
 import { DollarSign } from "lucide-react";
 
 function MiniSparkline({ values = [], height = 32, width = 120 }) {
-  if (!values.length) return null;
+  if (!values || !values.length) return null;
   const nums = values.map(v => v.value !== undefined ? v.value : v);
-  const min = Math.min(...nums);
-  const max = Math.max(...nums);
+  const validNums = nums.filter(v => v != null && typeof v === 'number');
+  if (validNums.length < 2) return null;
+  
+  const min = Math.min(...validNums);
+  const max = Math.max(...validNums);
   const range = max - min || 1;
-  const points = nums.map((v, i) => {
-    const x = nums.length === 1 ? width / 2 : (i / (nums.length - 1)) * width;
+  
+  const points = validNums.map((v, i) => {
+    const x = (i / (validNums.length - 1)) * width;
     const y = height - ((v - min) / range) * height;
     return `${x},${y}`;
   }).join(" ");
 
-  const isUp = nums.length >= 2 && nums[nums.length - 1] >= nums[0];
+  const isUp = validNums[validNums.length - 1] >= validNums[0];
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="mini-sparkline" style={{ color: isUp ? "var(--up)" : "var(--down)" }}>
       <polyline points={points} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
+}
+
+function formatMoney(value) {
+  if (value == null) return "--";
+  const sign = value >= 0 ? "+" : "";
+  return `${sign}${value.toFixed(2)}亿`;
+}
+
+function formatPercent(value) {
+  if (value == null) return "--";
+  return `${value.toFixed(2)}%`;
 }
 
 export default function CapitalFlow({ capitalData, capitalAI, onAnalyze }) {
@@ -42,6 +57,8 @@ export default function CapitalFlow({ capitalData, capitalAI, onAnalyze }) {
   const mainColor = cd.todayMainNetInflow >= 0 ? "var(--up)" : "var(--down)";
   const mainSign = cd.todayMainNetInflow >= 0 ? "+" : "";
 
+  const flowTrendLabel = cd.flowTrend === "连续流入" ? "流入" : cd.flowTrend === "连续流出" ? "流出" : cd.flowTrend === "震荡" ? "震荡" : "--";
+
   return (
     <section className="card capital-flow">
       <div className="card-header">
@@ -53,14 +70,14 @@ export default function CapitalFlow({ capitalData, capitalAI, onAnalyze }) {
         <div className="capital-main-value">
           <span className="capital-main-label">主力净流入</span>
           <strong style={{ color: mainColor }}>
-            {mainSign}{cd.todayMainNetInflow.toFixed(2)}亿
+            {mainSign}{cd.todayMainNetInflow != null ? cd.todayMainNetInflow.toFixed(2) : "--"}亿
           </strong>
         </div>
         <div className="capital-main-info">
           <span className="capital-trend">
-            连续{cd.consecutiveInflowDays}日{cd.flowTrend === "连续流入" ? "流入" : cd.flowTrend === "连续流出" ? "流出" : "震荡"}
+            连续{cd.consecutiveInflowDays != null ? cd.consecutiveInflowDays : "--"}日{flowTrendLabel}
           </span>
-          <span className="capital-ratio">占比: {cd.mainForceRatio.toFixed(2)}%</span>
+          <span className="capital-ratio">占比: {formatPercent(cd.mainForceRatio)}</span>
         </div>
       </div>
 
@@ -68,25 +85,25 @@ export default function CapitalFlow({ capitalData, capitalAI, onAnalyze }) {
         <div className="capital-item">
           <span>超大单</span>
           <strong style={{ color: cd.todaySuperLargeNetInflow >= 0 ? "var(--up)" : "var(--down)" }}>
-            {cd.todaySuperLargeNetInflow >= 0 ? "+" : ""}{cd.todaySuperLargeNetInflow.toFixed(2)}亿
+            {formatMoney(cd.todaySuperLargeNetInflow)}
           </strong>
         </div>
         <div className="capital-item">
           <span>大单</span>
           <strong style={{ color: cd.todayLargeNetInflow >= 0 ? "var(--up)" : "var(--down)" }}>
-            {cd.todayLargeNetInflow >= 0 ? "+" : ""}{cd.todayLargeNetInflow.toFixed(2)}亿
+            {formatMoney(cd.todayLargeNetInflow)}
           </strong>
         </div>
         <div className="capital-item">
           <span>中单</span>
           <strong style={{ color: cd.todayMediumNetInflow >= 0 ? "var(--up)" : "var(--down)" }}>
-            {cd.todayMediumNetInflow >= 0 ? "+" : ""}{cd.todayMediumNetInflow.toFixed(2)}亿
+            {formatMoney(cd.todayMediumNetInflow)}
           </strong>
         </div>
         <div className="capital-item">
           <span>小单</span>
           <strong style={{ color: cd.todaySmallNetInflow >= 0 ? "var(--up)" : "var(--down)" }}>
-            {cd.todaySmallNetInflow >= 0 ? "+" : ""}{cd.todaySmallNetInflow.toFixed(2)}亿
+            {formatMoney(cd.todaySmallNetInflow)}
           </strong>
         </div>
       </div>
@@ -97,8 +114,8 @@ export default function CapitalFlow({ capitalData, capitalAI, onAnalyze }) {
           <MiniSparkline values={cd.recent5DaysFlow || []} />
         </div>
         <div className="capital-status">
-          <span>量价状态: <strong>{cd.volumePriceMatch}</strong></span>
-          <span>综合评估: <strong>{cd.assessment}</strong></span>
+          <span>量价状态: <strong>{cd.volumePriceMatch ?? "--"}</strong></span>
+          <span>综合评估: <strong>{cd.assessment ?? "--"}</strong></span>
         </div>
       </div>
 
