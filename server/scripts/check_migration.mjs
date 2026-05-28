@@ -74,7 +74,7 @@ async function main() {
   // 尝试通过 Management API 执行SQL
   console.log('\n尝试通过 Supabase Management API 执行 SQL...');
   
-  const managementUrl = `SUPABASE_MANAGEMENT_API_URL`;
+  const managementUrl = `https://api.supabase.com/v1/projects/${supabaseUrl.replace('https://', '').replace('.supabase.co', '')}/query`;
   
   // 读取SQL文件
   const sqlPath = path.join(__dirname, '..', 'output', 'supabase_migration.sql');
