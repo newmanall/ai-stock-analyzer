@@ -12,7 +12,6 @@ import capitalRoutes from "./routes/capitalRoutes.js";
 import northboundRoutes from "./routes/northboundRoutes.js";
 import comprehensiveRoutes from "./routes/comprehensiveRoutes.js";
 import financeRoutes from "./routes/financeRoutes.js";
-import researchApi from "./research_api.js";
 import researchRoutes from "./routes/researchRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -48,8 +47,7 @@ app.use("/api", capitalRoutes);         // /api/capital/*
 app.use("/api", northboundRoutes);      // /api/northbound/*
 app.use("/api", comprehensiveRoutes);   // /api/comprehensive
 app.use("/api", financeRoutes);         // /api/finance/*
-app.use("/api/research", researchApi);  // /api/research/* (数据管理 CRUD)
-app.use("/api/research", researchRoutes); // /api/research/* (AI 研判分析)
+app.use("/api/research", researchRoutes); // /api/research/*
 
 // ── 静态文件 ─────────────────────────────────────────────────────────────────
 const publicDir = path.join(__dirname, "public");

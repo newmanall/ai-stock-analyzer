@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { scanMarket, buildCompsAnalysis, assessFinancialHealth, deepAnalyze } from "../smartScreener.js";
+import { scanMarket, buildCompsAnalysis, assessFinancialHealth, deepAnalyze } from "../screenerService.js";
 
 const router = Router();
 

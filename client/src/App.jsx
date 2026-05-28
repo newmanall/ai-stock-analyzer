@@ -16,7 +16,7 @@ import TechAnalysis from "./TechAnalysis.jsx";
 import CapitalFlow from "./CapitalFlow.jsx";
 import Northbound from "./Northbound.jsx";
 import Comprehensive from "./Comprehensive.jsx";
-import MarketOverview from "./components/MarketOverview.jsx";
+import { MarketOverview } from "./components/index.js";
 import StockDetail from "./StockDetail.jsx";
 import AIAnalysisPanel from "./AIAnalysisPanel.jsx";
 import SearchPanel from "./SearchPanel.jsx";
@@ -25,8 +25,12 @@ import HistoryPanel from "./HistoryPanel.jsx";
 import DataManagement from "./DataManagement.jsx";
 
 import { loadWatchlist, saveWatchlist } from "./utils/watchlistStorage.js";
+import { useTheme } from "./hooks/useTheme.js";
+import { useTabNavigation } from "./hooks/useTabNavigation.js";
 
 export default function App() {
+  const { theme, toggleTheme } = useTheme();
+  const { activeTab, setActiveTab } = useTabNavigation();
   const [market, setMarket] = useState("usstock");
   const [symbol, setSymbol] = useState("");
   const [stockData, setStockData] = useState(null);
@@ -61,9 +65,6 @@ export default function App() {
   const [scanError, setScanError] = useState("");
   const [supabaseStatus, setSupabaseStatus] = useState(null);
 
-  const [theme, setTheme] = useState(() => localStorage.getItem("dashboardTheme") || "light");
-  const [activeTab, setActiveTab] = useState(() => localStorage.getItem("activeTab") || "market");
-
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("dashboardTheme", theme);
@@ -72,8 +73,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("activeTab", activeTab);
   }, [activeTab]);
-
-  const toggleTheme = () => setTheme(prev => (prev === "dark" ? "light" : "dark"));
 
   const isLoading = status === "loading-stock" || status === "loading-astock";
   const isAnalyzing = status === "analyzing";

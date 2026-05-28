@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { scanMarket, buildCompsAnalysis, assessFinancialHealth, deepAnalyze } from "../smartScreener.js";
+import { scanMarket, buildCompsAnalysis, assessFinancialHealth, deepAnalyze } from "../screenerService.js";
 import { explainSmartPick } from "../aiService.js";
 
 const router = Router();
@@ -16,7 +16,7 @@ router.get("/screener/scan", async (req, res) => {
 
 router.get("/screener/stock/:code", async (req, res) => {
   try {
-    const { fetchStockDetail, fetchStockKline } = await import("../smartScreener.js");
+    const { fetchStockDetail, fetchStockKline } = await import("../screenerService.js");
     const code = req.params.code;
 
     const stockData = await fetchStockDetail(code);
@@ -39,7 +39,7 @@ router.get("/screener/stock/:code", async (req, res) => {
 
 router.get("/screener/mock", async (req, res) => {
   try {
-    const smartScreener = await import("../smartScreener.js");
+    const smartScreener = await import("../screenerService.js");
     const stocks = smartScreener.MOCK_STOCKS || [];
     res.json({ stocks, total: stocks.length });
   } catch (error) {

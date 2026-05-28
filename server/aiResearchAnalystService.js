@@ -9,7 +9,7 @@ import {
   analyzeSector, 
   generateResearchReport,
   generateQuickAnalysis
-} from "./aiResearchEngine.js";
+} from "./aiResearchEngineService.js";
 
 // ==================== 1. 投资论点构建（增强版） ====================
 

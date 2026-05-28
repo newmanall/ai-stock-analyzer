@@ -6,7 +6,7 @@
  * -> thesis + risks for analyst review. It does not make trading decisions.
  */
 
-import { calcMA, calcMACD, calcRSI } from "./technicalAnalyzer.js";
+import { calcMA, calcMACD, calcRSI } from "./technicalAnalysisService.js";
 import { saveSearchHistory } from "./supabase.js";
 import { getKLine, getRealtimeQuote } from "./services/eastmoney.js";
 

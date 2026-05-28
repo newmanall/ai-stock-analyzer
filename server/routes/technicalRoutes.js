@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { explainTechnical as techExplain } from "../technicalAnalyzer.js";
+import { explainTechnical as techExplain } from "../technicalAnalysisService.js";
 import { explainTechnical } from "../aiService.js";
 
 const router = Router();
@@ -9,7 +9,7 @@ router.post("/technical/analyze", async (req, res) => {
     const { code } = req.body || {};
     if (!code) return res.status(400).json({ error: "code is required" });
 
-    const { fetchStockKline } = await import("../smartScreener.js");
+    const { fetchStockKline } = await import("../screenerService.js");
     const klineData = await fetchStockKline(code);
     if (!klineData?.closes?.length) {
       return res.status(404).json({ error: `No K-line history available for ${code}` });
