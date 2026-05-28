@@ -4,7 +4,7 @@ import {
   analyzeAStock, analyzeStock, fetchAStock, fetchMarketIndices,
   fetchRecentAnalyses, fetchSectorPerformance, fetchStock, scanMarket,
   explainSmartPick, analyzeTechnical, explainTechnical,
-  analyzeCapitalFlow, explainCapitalFlow, analyzeNorthbound, explainNorthbound,
+  analyzeCapitalFlow, explainCapitalFlow,
   comprehensiveAnalysis, deleteAnalysis, saveSearchHistory, fetchSearchHistory,
   deleteSearchHistory, clearAllSearchHistory, fetchResearchReports,
   deleteResearchReport, fetchInvestmentTheses, deleteInvestmentThesis,
@@ -14,7 +14,6 @@ import {
 import SmartScreener from "./SmartScreener.jsx";
 import TechAnalysis from "./TechAnalysis.jsx";
 import CapitalFlow from "./CapitalFlow.jsx";
-import Northbound from "./Northbound.jsx";
 import Comprehensive from "./Comprehensive.jsx";
 import { MarketOverview } from "./components/index.js";
 import StockDetail from "./StockDetail.jsx";
@@ -52,8 +51,6 @@ export default function App() {
   const [techAI, setTechAI] = useState(null);
   const [capitalData, setCapitalData] = useState(null);
   const [capitalAI, setCapitalAI] = useState(null);
-  const [nbData, setNbData] = useState(null);
-  const [nbAI, setNbAI] = useState(null);
   const [comprehensive, setComprehensive] = useState(null);
   const [compLoading, setCompLoading] = useState(false);
   const [sector, setSector] = useState("all");
@@ -188,7 +185,15 @@ export default function App() {
     try {
       const t = await analyzeTechnical(stockData.symbol); setTechData(t);
       const a = await explainTechnical({ stockName: stockData.name || stockData.symbol, indicators: t.allIndicators, signals: t.allSignals }); setTechAI(a);
-    } catch (err) { addToast("技术分析失败: " + err.message, "error"); }
+} catch (err) {
+      // K线数据不可用时保持初始状态（不弹错误提示）
+      if (err.message?.includes("No K-line history")) {
+        setTechData(null);
+        setTechAI(null);
+        return;
+      }
+      addToast("技术分析失败: " + err.message, "error");
+    }
   }
 
   async function handleCapitalAnalysis() {
@@ -199,21 +204,13 @@ export default function App() {
     } catch (err) { addToast("资金分析失败: " + err.message, "error"); }
   }
 
-  async function handleNorthboundAnalysis() {
-    try {
-      const nb = await analyzeNorthbound(); setNbData(nb);
-      const a = await explainNorthbound({ nbData: nb, marketContext: "正常" }); setNbAI(a);
-    } catch (err) { addToast("北向资金分析失败: " + err.message, "error"); }
-  }
-
   async function handleComprehensive() {
     if (!stockData?.symbol) { addToast("请先获取股票数据", "warning"); return; }
     setCompLoading(true);
     try {
-      const [tech, cap, nb, finance] = await Promise.all([
+      const [tech, cap, finance] = await Promise.all([
         analyzeTechnical(stockData.symbol).catch(() => null),
         analyzeCapitalFlow(stockData.symbol).catch(() => null),
-        analyzeNorthbound().catch(() => null),
         (async () => {
           try {
             const h = await (await fetch("/api/finance/health-assessment", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ symbol: stockData.symbol }) })).json();
@@ -222,7 +219,7 @@ export default function App() {
           } catch { return { health: null, comps: null, target: null }; }
         })()
       ]);
-      const comp = await comprehensiveAnalysis({ stockName: stockData.name || stockData.symbol, stockSymbol: stockData.symbol, technical: tech, capital: cap, northbound: nb, marketIndex: "上证指数", financeData: finance });
+      const comp = await comprehensiveAnalysis({ stockName: stockData.name || stockData.symbol, stockSymbol: stockData.symbol, technical: tech, capital: cap, northbound: null, marketIndex: "上证指数", financeData: finance });
       setComprehensive(comp);
     } catch (err) { addToast("综合研判失败: " + err.message, "error"); }
     finally { setCompLoading(false); }
@@ -452,13 +449,12 @@ export default function App() {
                 }}
               />
             </div>
-            <Northbound nbData={nbData} nbAI={nbAI} onAnalyze={handleNorthboundAnalysis} />
+            <CapitalFlow capitalData={capitalData} capitalAI={capitalAI} onAnalyze={handleCapitalAnalysis} />
           </div>
 
           {stockData && (
             <div className="analysis-row">
               <TechAnalysis techData={techData} techAI={techAI} onAnalyze={handleTechAnalysis} />
-              <CapitalFlow capitalData={capitalData} capitalAI={capitalAI} onAnalyze={handleCapitalAnalysis} />
             </div>
           )}
 
