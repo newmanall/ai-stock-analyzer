@@ -87,6 +87,7 @@ export default function CapitalFlow({ capitalData, capitalAI, onAnalyze }) {
   }
 
   const cd = capitalData;
+  const isMock = cd.warning && cd.warning.includes("模拟");
   const mainColor = cd.todayMainNetInflow >= 0 ? "var(--up)" : "var(--down)";
   const mainSign = cd.todayMainNetInflow >= 0 ? "+" : "";
 
@@ -98,6 +99,16 @@ export default function CapitalFlow({ capitalData, capitalAI, onAnalyze }) {
         <h2><DollarSign size={18} /> 资金面分析</h2>
         <button className="btn-analyze btn-sm" onClick={onAnalyze}>刷新</button>
       </div>
+
+      {isMock && (
+        <div className="mock-warning" style={{
+          background: "var(--warning-bg, #fef3c7)", color: "var(--warning-text, #92400e)",
+          padding: "6px 12px", borderRadius: "6px", fontSize: "0.78rem", marginBottom: "10px",
+          border: "1px solid var(--warning-border, #f59e0b)",
+        }}>
+          ⚠️ {cd.warning}
+        </div>
+      )}
 
       <div className="capital-main">
         <div className="capital-main-value">
