@@ -49,6 +49,7 @@ export default function Northbound({ nbData, nbAI, onAnalyze }) {
   }
 
   const nd = nbData;
+  const isMock = nd.warning && nd.warning.includes("模拟");
   const totalSign = nd.todayTotalNetInflow >= 0 ? "+" : "";
   const totalColor = nd.todayTotalNetInflow >= 0 ? "var(--up)" : "var(--down)";
   const shSign = nd.todaySHNetInflow >= 0 ? "+" : "";
@@ -71,6 +72,16 @@ export default function Northbound({ nbData, nbAI, onAnalyze }) {
         <h2><Globe size={18} /> 北向资金</h2>
         <button className="btn-analyze btn-sm" onClick={onAnalyze}>刷新</button>
       </div>
+
+      {isMock && (
+        <div className="mock-warning" style={{
+          background: "var(--warning-bg, #fef3c7)", color: "var(--warning-text, #92400e)",
+          padding: "6px 12px", borderRadius: "6px", fontSize: "0.78rem", marginBottom: "10px",
+          border: "1px solid var(--warning-border, #f59e0b)",
+        }}>
+          ⚠️ {nd.warning}
+        </div>
+      )}
 
       <div className="nb-grid">
         <div className="nb-item">
