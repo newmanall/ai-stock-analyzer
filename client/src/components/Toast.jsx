@@ -18,7 +18,7 @@ const ICONS = {
   success: CheckCircle,
   warning: AlertTriangle,
   error: AlertCircle,
-  info,
+  info: Info,
 };
 
 export function ToastProvider({ children }) {
