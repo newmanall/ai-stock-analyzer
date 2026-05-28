@@ -21,26 +21,7 @@ const EAST_MONEY_FLOW_URL = "https://push2.eastmoney.com/api/qt/stock/fflow/dayk
 
 // ── 降级数据 ──────────────────────────────────────────────────────────────────
 
-const MOCK_CAPITAL_FLOW = {
-  todayMainNetInflow: -2.45,
-  todaySuperLargeNetInflow: -1.20,
-  todayLargeNetInflow: -1.25,
-  todayMediumNetInflow: 0.68,
-  todaySmallNetInflow: 1.77,
-  consecutiveInflowDays: 0,
-  recent5DaysFlow: [
-    { date: "05-22", value: 3.50 },
-    { date: "05-23", value: -1.20 },
-    { date: "05-26", value: -0.80 },
-    { date: "05-27", value: -2.10 },
-    { date: "05-28", value: -2.45 },
-  ],
-  flowTrend: "连续流出",
-  volumePriceMatch: "放量下跌",
-  mainForceRatio: -8.50,
-  assessment: "主力持续流出，资金面偏空，暂宜观望",
-  warning: "当前使用模拟数据（非实时），输入股票代码点击分析获取真实数据",
-};
+// 不再使用模拟数据——所有数据源不可用时返回空数据
 
 function makeSecid(code) {
   if (code.startsWith("6")) return `1.${code}`;
@@ -137,22 +118,30 @@ export async function analyzeCapitalFlow(code) {
     console.warn("Capital flow quote error:", err.message);
   }
 
-  // ── 3. 如果两个数据源都没有真实数据 → 降级 ────────────────────────────
+  // ── 3. 如果两个数据源都没有真实数据 ─────────────────────────────────
   if (!klineOk && !quoteOk) {
-    return { ...MOCK_CAPITAL_FLOW };
+    return {
+      todayMainNetInflow: null,
+      todaySuperLargeNetInflow: null,
+      todayLargeNetInflow: null,
+      todayMediumNetInflow: null,
+      todaySmallNetInflow: null,
+      consecutiveInflowDays: 0,
+      recent5DaysFlow: [],
+      flowTrend: "暂无数据",
+      volumePriceMatch: "暂无数据",
+      mainForceRatio: null,
+      assessment: "数据源不可用，无法获取资金流向数据",
+      warning: "当前所有数据源均不可用",
+      dataUnavailable: true,
+    };
   }
 
-  // 如果只有K线好但没中单/小单 → 估算
+  // 如果只有K线好的真实数据，中单/小单留空（非交易时段不可获取，不估算）
   if (klineOk && (todayMediumNetInflow === 0 && todaySmallNetInflow === 0)) {
-    // 中单和小单与主力反向，中单≈主力×30%, 小单≈主力×20%
-    if (todayMainNetInflow > 0) {
-      todayMediumNetInflow = Number((-todayMainNetInflow * 0.35).toFixed(2));
-      todaySmallNetInflow = Number((-todayMainNetInflow * 0.25).toFixed(2));
-    } else {
-      todayMediumNetInflow = Number((-todayMainNetInflow * 0.45).toFixed(2));
-      todaySmallNetInflow = Number((-todayMainNetInflow * 0.30).toFixed(2));
-    }
-    warning = "行情数据为非交易时段，部分资金流向为估算值";
+    todayMediumNetInflow = null;
+    todaySmallNetInflow = null;
+    warning = "非交易时段，中单/小单数据不可获取";
   }
 
   // 如果只有行情好但K线没数据（极少发生）

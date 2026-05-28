@@ -1507,6 +1507,10 @@ button:disabled {
   font-weight: 700;
 }
 
+.capital-item-disabled {
+  opacity: 0.5;
+}
+
 .capital-trend-section {
   margin-top: 14px;
   padding: 10px;

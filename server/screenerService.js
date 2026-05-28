@@ -165,31 +165,9 @@ function getMockUniverse(sector = "all") {
   return deduped.map((item) => normalizeListItem(item, sector));
 }
 
-function generateFallbackKline(stock, count = 90) {
-  const close = stock.close || 10;
-  const trend = (stock.changePercent || 0) / 100;
-  const items = [];
-
-  for (let i = count - 1; i >= 0; i--) {
-    const drift = 1 - trend * (i / count) * 2;
-    const wave = Math.sin(i / 4) * 0.025 + Math.cos(i / 9) * 0.015;
-    const c = Math.max(0.1, close * drift * (1 + wave));
-    const o = c * (1 + Math.sin(i / 3) * 0.008);
-    const h = Math.max(o, c) * 1.015;
-    const l = Math.min(o, c) * 0.985;
-    const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    items.push({
-      date,
-      open: Number(o.toFixed(2)),
-      high: Number(h.toFixed(2)),
-      low: Number(l.toFixed(2)),
-      close: Number(c.toFixed(2)),
-      volume: Math.round((stock.volume || 1000000) * (0.7 + (i % 7) * 0.08)),
-      amount: Math.round((stock.amount || 100000000) * (0.7 + (i % 5) * 0.08)),
-    });
-  }
-
-  return normalizeKlineItems(items, "estimated_from_quote");
+/** 返回空 K 线——不估算虚拟数据 */
+function emptyKline() {
+  return { items: [], closes: [], highs: [], lows: [], source: "unavailable" };
 }
 
 function normalizeKlineItems(items, source) {
@@ -239,7 +217,7 @@ async function fetchKlineForStock(code, quote = null) {
     }
   }
 
-  return generateFallbackKline(quote || { close: 10, changePercent: 0 }, 90);
+  return emptyKline();
 }
 
 function filterInvestableUniverse(stocks) {
@@ -310,7 +288,7 @@ function scoreStock(stock, kline, sector = "all") {
   const totalScore = Math.max(0, Math.min(100, Math.round(technical + liquidity + valuation + marketFit + quality - riskPenalty)));
 
   const risks = [];
-  if (kline.source === "estimated_from_quote") risks.push("K 线为估算数据，请以主数据源为准核实。");
+  // K线真实数据不做额外风险标记
   if (stock.pe > 55) risks.push("估值偏高，超出基础 PE 筛选范围。");
   if (stock.turnoverRate > 12) risks.push("换手率偏高，短期波动可能占主导。");
   if (rsi.value > 75) risks.push("RSI 偏高，注意回调风险。");

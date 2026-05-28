@@ -49,11 +49,11 @@ export default function Northbound({ nbData, nbAI, onAnalyze }) {
   }
 
   const nd = nbData;
-  const isMock = nd.warning && nd.warning.includes("模拟");
-  const totalSign = nd.todayTotalNetInflow >= 0 ? "+" : "";
-  const totalColor = nd.todayTotalNetInflow >= 0 ? "amount-up" : "amount-down";
-  const shColor = nd.todaySHNetInflow >= 0 ? "amount-up" : "amount-down";
-  const szColor = nd.todaySZNetInflow >= 0 ? "amount-up" : "amount-down";
+  const isMock = nd.warning && (nd.warning.includes("模拟") || nd.warning.includes("不可用"));
+  const totalSign = nd.todayTotalNetInflow != null && nd.todayTotalNetInflow >= 0 ? "+" : "";
+  const totalColor = nd.todayTotalNetInflow != null && nd.todayTotalNetInflow >= 0 ? "amount-up" : "amount-down";
+  const shColor = nd.todaySHNetInflow != null && nd.todaySHNetInflow >= 0 ? "amount-up" : "amount-down";
+  const szColor = nd.todaySZNetInflow != null && nd.todaySZNetInflow >= 0 ? "amount-up" : "amount-down";
 
   const signalColorMap = {
     "积极做多": "#22c55e",

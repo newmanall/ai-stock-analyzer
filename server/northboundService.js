@@ -19,23 +19,7 @@ const NB_HISTORY_URL = "https://push2.eastmoney.com/api/qt/kamt.kline/get";
 
 // ── 降级数据 ──────────────────────────────────────────────────────────────────
 
-const MOCK_NORTHBOUND = {
-  todaySHNetInflow: 12.45,
-  todaySZNetInflow: 8.32,
-  todayTotalNetInflow: 20.77,
-  recent5Days: [
-    { date: "05-22", shNet: -5.12, szNet: -3.88, total: -9.00 },
-    { date: "05-23", shNet: 15.60, szNet: 10.20, total: 26.80 },
-    { date: "05-26", shNet: 8.75, szNet: 6.30, total: 15.05 },
-    { date: "05-27", shNet: 20.10, szNet: 12.50, total: 32.60 },
-    { date: "05-28", shNet: 12.45, szNet: 8.32, total: 20.77 },
-  ],
-  consecutiveInflowDays: 4,
-  trend: "持续流入",
-  signal: "积极做多",
-  summary: "北向资金连续4日大幅净流入，外资积极做多A股",
-  warning: "当前使用模拟数据（非实时），点击刷新获取最新",
-};
+// 不再使用模拟数据——所有数据源不可用时返回空数据
 
 // ── 核心分析 ──────────────────────────────────────────────────────────────────
 
@@ -130,8 +114,17 @@ export async function analyzeNorthbound() {
   const isRealData = realtimeOk || recent5Days.some(d => d.total !== 0);
 
   if (!isRealData) {
-    // 全部是0 → 使用降级数据
-    return { ...MOCK_NORTHBOUND };
+    return {
+      todaySHNetInflow: null,
+      todaySZNetInflow: null,
+      todayTotalNetInflow: null,
+      recent5Days: [],
+      consecutiveInflowDays: 0,
+      trend: "暂无数据",
+      signal: "暂无数据",
+      summary: "北向数据暂不可用（非交易时段或无交易数据）",
+      dataUnavailable: true,
+    };
   }
 
   // ── 4. 计算指标 ─────────────────────────────────────────────────────────

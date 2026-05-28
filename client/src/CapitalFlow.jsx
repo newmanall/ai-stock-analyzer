@@ -87,11 +87,11 @@ export default function CapitalFlow({ capitalData, capitalAI, onAnalyze }) {
   }
 
   const cd = capitalData;
-  const isMock = cd.warning && cd.warning.includes("模拟");
-  const mainColor = cd.todayMainNetInflow >= 0 ? "amount-up" : "amount-down";
-  const mainSign = cd.todayMainNetInflow >= 0 ? "+" : "";
+  const isMock = cd.warning && (cd.warning.includes("模拟") || cd.warning.includes("不可用"));
+  const mainColor = cd.todayMainNetInflow !== null && cd.todayMainNetInflow >= 0 ? "amount-up" : "amount-down";
+  const mainSign = cd.todayMainNetInflow !== null && cd.todayMainNetInflow >= 0 ? "+" : "";
 
-  const flowTrendLabel = cd.flowTrend === "连续流入" ? "流入" : cd.flowTrend === "连续流出" ? "流出" : cd.flowTrend === "震荡" ? "震荡" : "--";
+  const flowTrendLabel = cd.flowTrend === "连续流入" ? "流入" : cd.flowTrend === "连续流出" ? "流出" : cd.flowTrend && cd.flowTrend !== "暂无数据" ? "震荡" : "--";
 
   return (
     <section className="card capital-flow">
@@ -122,27 +122,27 @@ export default function CapitalFlow({ capitalData, capitalAI, onAnalyze }) {
       </div>
 
       <div className="capital-details">
-        <div className="capital-item">
+        <div className={`capital-item${cd.dataUnavailable ? " capital-item-disabled" : ""}`}>
           <span>超大单</span>
-          <strong className={cd.todaySuperLargeNetInflow >= 0 ? "amount-up" : "amount-down"}>
+          <strong className={cd.todaySuperLargeNetInflow != null && cd.todaySuperLargeNetInflow >= 0 ? "amount-up" : "amount-down"}>
             {formatMoney(cd.todaySuperLargeNetInflow)}
           </strong>
         </div>
-        <div className="capital-item">
+        <div className={`capital-item${cd.dataUnavailable ? " capital-item-disabled" : ""}`}>
           <span>大单</span>
-          <strong className={cd.todayLargeNetInflow >= 0 ? "amount-up" : "amount-down"}>
+          <strong className={cd.todayLargeNetInflow != null && cd.todayLargeNetInflow >= 0 ? "amount-up" : "amount-down"}>
             {formatMoney(cd.todayLargeNetInflow)}
           </strong>
         </div>
-        <div className="capital-item">
+        <div className={`capital-item${cd.dataUnavailable ? " capital-item-disabled" : ""}`}>
           <span>中单</span>
-          <strong className={cd.todayMediumNetInflow >= 0 ? "amount-up" : "amount-down"}>
+          <strong className={cd.todayMediumNetInflow != null && cd.todayMediumNetInflow >= 0 ? "amount-up" : "amount-down"}>
             {formatMoney(cd.todayMediumNetInflow)}
           </strong>
         </div>
-        <div className="capital-item">
+        <div className={`capital-item${cd.dataUnavailable ? " capital-item-disabled" : ""}`}>
           <span>小单</span>
-          <strong className={cd.todaySmallNetInflow >= 0 ? "amount-up" : "amount-down"}>
+          <strong className={cd.todaySmallNetInflow != null && cd.todaySmallNetInflow >= 0 ? "amount-up" : "amount-down"}>
             {formatMoney(cd.todaySmallNetInflow)}
           </strong>
         </div>
