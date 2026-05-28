@@ -5,11 +5,11 @@ function MiniSparkline({ values = [], height = 28, width = 120 }) {
   const nums = values.map(v => v.value !== undefined ? v.value : v);
   const validNums = nums.filter(v => v != null && typeof v === 'number');
   if (validNums.length < 2) return null;
-  
+
   const min = Math.min(...validNums);
   const max = Math.max(...validNums);
   const range = max - min || 1;
-  
+
   const points = validNums.map((v, i) => {
     const x = (i / (validNums.length - 1)) * width;
     const y = height - ((v - min) / range) * height;
@@ -19,7 +19,7 @@ function MiniSparkline({ values = [], height = 28, width = 120 }) {
   const isUp = validNums[validNums.length - 1] >= validNums[0];
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="mini-sparkline" style={{ color: isUp ? "var(--up)" : "var(--down)" }}>
+    <svg viewBox={`0 0 ${width} ${height}`} className={`mini-sparkline ${isUp ? "text-up" : "text-down"}`}>
       <polyline points={points} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
@@ -40,7 +40,7 @@ export default function Northbound({ nbData, nbAI, onAnalyze }) {
         </div>
         <div className="empty-state">
           <button className="btn-analyze" onClick={onAnalyze}>查看北向资金</button>
-          <p style={{ marginTop: "10px", fontSize: "0.82rem" }}>
+          <p className="empty-state-desc">
             实时追踪沪股通、深股通资金流入流出
           </p>
         </div>
@@ -51,9 +51,9 @@ export default function Northbound({ nbData, nbAI, onAnalyze }) {
   const nd = nbData;
   const isMock = nd.warning && nd.warning.includes("模拟");
   const totalSign = nd.todayTotalNetInflow >= 0 ? "+" : "";
-  const totalColor = nd.todayTotalNetInflow >= 0 ? "var(--up)" : "var(--down)";
-  const shSign = nd.todaySHNetInflow >= 0 ? "+" : "";
-  const szSign = nd.todaySZNetInflow >= 0 ? "+" : "";
+  const totalColor = nd.todayTotalNetInflow >= 0 ? "amount-up" : "amount-down";
+  const shColor = nd.todaySHNetInflow >= 0 ? "amount-up" : "amount-down";
+  const szColor = nd.todaySZNetInflow >= 0 ? "amount-up" : "amount-down";
 
   const signalColorMap = {
     "积极做多": "#22c55e",
@@ -74,11 +74,7 @@ export default function Northbound({ nbData, nbAI, onAnalyze }) {
       </div>
 
       {isMock && (
-        <div className="mock-warning" style={{
-          background: "var(--warning-bg, #fef3c7)", color: "var(--warning-text, #92400e)",
-          padding: "6px 12px", borderRadius: "6px", fontSize: "0.78rem", marginBottom: "10px",
-          border: "1px solid var(--warning-border, #f59e0b)",
-        }}>
+        <div className="mock-warning">
           ⚠️ {nd.warning}
         </div>
       )}
@@ -86,17 +82,17 @@ export default function Northbound({ nbData, nbAI, onAnalyze }) {
       <div className="nb-grid">
         <div className="nb-item">
           <span className="nb-label">今日合计</span>
-          <strong style={{ color: totalColor }}>{formatMoney(nd.todayTotalNetInflow)}</strong>
+          <strong className={totalColor}>{formatMoney(nd.todayTotalNetInflow)}</strong>
         </div>
         <div className="nb-item">
           <span className="nb-label">沪股通</span>
-          <strong style={{ color: nd.todaySHNetInflow >= 0 ? "var(--up)" : "var(--down)" }}>
+          <strong className={shColor}>
             {formatMoney(nd.todaySHNetInflow)}
           </strong>
         </div>
         <div className="nb-item">
           <span className="nb-label">深股通</span>
-          <strong style={{ color: nd.todaySZNetInflow >= 0 ? "var(--up)" : "var(--down)" }}>
+          <strong className={szColor}>
             {formatMoney(nd.todaySZNetInflow)}
           </strong>
         </div>

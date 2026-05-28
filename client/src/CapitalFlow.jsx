@@ -5,11 +5,11 @@ function MiniSparkline({ values = [], height = 32, width = 120 }) {
   const nums = values.map(v => v.value !== undefined ? v.value : v);
   const validNums = nums.filter(v => v != null && typeof v === 'number');
   if (validNums.length < 2) return null;
-  
+
   const min = Math.min(...validNums);
   const max = Math.max(...validNums);
   const range = max - min || 1;
-  
+
   const points = validNums.map((v, i) => {
     const x = (i / (validNums.length - 1)) * width;
     const y = height - ((v - min) / range) * height;
@@ -19,7 +19,7 @@ function MiniSparkline({ values = [], height = 32, width = 120 }) {
   const isUp = validNums[validNums.length - 1] >= validNums[0];
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="mini-sparkline" style={{ color: isUp ? "var(--up)" : "var(--down)" }}>
+    <svg viewBox={`0 0 ${width} ${height}`} className={`mini-sparkline ${isUp ? "text-up" : "text-down"}`}>
       <polyline points={points} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
@@ -78,7 +78,7 @@ export default function CapitalFlow({ capitalData, capitalAI, onAnalyze }) {
         </div>
         <div className="empty-state">
           <button className="btn-analyze" onClick={onAnalyze}>查看资金面</button>
-          <p style={{ marginTop: "10px", fontSize: "0.82rem" }}>
+          <p className="empty-state-desc">
             分析主力、超大单、大单、中单、小单资金流向
           </p>
         </div>
@@ -88,7 +88,7 @@ export default function CapitalFlow({ capitalData, capitalAI, onAnalyze }) {
 
   const cd = capitalData;
   const isMock = cd.warning && cd.warning.includes("模拟");
-  const mainColor = cd.todayMainNetInflow >= 0 ? "var(--up)" : "var(--down)";
+  const mainColor = cd.todayMainNetInflow >= 0 ? "amount-up" : "amount-down";
   const mainSign = cd.todayMainNetInflow >= 0 ? "+" : "";
 
   const flowTrendLabel = cd.flowTrend === "连续流入" ? "流入" : cd.flowTrend === "连续流出" ? "流出" : cd.flowTrend === "震荡" ? "震荡" : "--";
@@ -101,11 +101,7 @@ export default function CapitalFlow({ capitalData, capitalAI, onAnalyze }) {
       </div>
 
       {isMock && (
-        <div className="mock-warning" style={{
-          background: "var(--warning-bg, #fef3c7)", color: "var(--warning-text, #92400e)",
-          padding: "6px 12px", borderRadius: "6px", fontSize: "0.78rem", marginBottom: "10px",
-          border: "1px solid var(--warning-border, #f59e0b)",
-        }}>
+        <div className="mock-warning">
           ⚠️ {cd.warning}
         </div>
       )}
@@ -113,7 +109,7 @@ export default function CapitalFlow({ capitalData, capitalAI, onAnalyze }) {
       <div className="capital-main">
         <div className="capital-main-value">
           <span className="capital-main-label">主力净流入</span>
-          <strong style={{ color: mainColor }}>
+          <strong className={mainColor}>
             {mainSign}{cd.todayMainNetInflow != null ? cd.todayMainNetInflow.toFixed(2) : "--"}亿
           </strong>
         </div>
@@ -128,25 +124,25 @@ export default function CapitalFlow({ capitalData, capitalAI, onAnalyze }) {
       <div className="capital-details">
         <div className="capital-item">
           <span>超大单</span>
-          <strong style={{ color: cd.todaySuperLargeNetInflow >= 0 ? "var(--up)" : "var(--down)" }}>
+          <strong className={cd.todaySuperLargeNetInflow >= 0 ? "amount-up" : "amount-down"}>
             {formatMoney(cd.todaySuperLargeNetInflow)}
           </strong>
         </div>
         <div className="capital-item">
           <span>大单</span>
-          <strong style={{ color: cd.todayLargeNetInflow >= 0 ? "var(--up)" : "var(--down)" }}>
+          <strong className={cd.todayLargeNetInflow >= 0 ? "amount-up" : "amount-down"}>
             {formatMoney(cd.todayLargeNetInflow)}
           </strong>
         </div>
         <div className="capital-item">
           <span>中单</span>
-          <strong style={{ color: cd.todayMediumNetInflow >= 0 ? "var(--up)" : "var(--down)" }}>
+          <strong className={cd.todayMediumNetInflow >= 0 ? "amount-up" : "amount-down"}>
             {formatMoney(cd.todayMediumNetInflow)}
           </strong>
         </div>
         <div className="capital-item">
           <span>小单</span>
-          <strong style={{ color: cd.todaySmallNetInflow >= 0 ? "var(--up)" : "var(--down)" }}>
+          <strong className={cd.todaySmallNetInflow >= 0 ? "amount-up" : "amount-down"}>
             {formatMoney(cd.todaySmallNetInflow)}
           </strong>
         </div>

@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Sparkline from "./common/Sparkline.jsx";
 import { formatNumber } from "../utils/formatters.js";
+import Skeleton from "./Skeleton.jsx";
 
 export default function MarketOverview({
   indices,
@@ -16,17 +17,19 @@ export default function MarketOverview({
       <div className="indices-section">
         <div className="section-header">
           <h3>大盘指数</h3>
-          <div className="scroll-arrows">
-            <button onClick={() => onScrollIndices("left")} disabled={indicesScroll === 0}>
-              <ChevronLeft size={16} />
-            </button>
-            <button
-              onClick={() => onScrollIndices("right")}
-              disabled={indicesScroll >= indices.length - 5}
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
+          {indices.length > 0 && (
+            <div className="scroll-arrows">
+              <button onClick={() => onScrollIndices("left")} disabled={indicesScroll === 0}>
+                <ChevronLeft size={16} />
+              </button>
+              <button
+                onClick={() => onScrollIndices("right")}
+                disabled={indicesScroll >= indices.length - 5}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
         </div>
 
         {indices.length > 0 ? (
@@ -51,11 +54,11 @@ export default function MarketOverview({
             })}
           </div>
         ) : (
-          <div className="empty-row">加载指数数据中...</div>
+          <Skeleton.IndicesRow count={5} />
         )}
       </div>
 
-      {topSectors.length > 0 && (
+      {topSectors.length > 0 ? (
         <div className="sectors-section">
           <h3>行业板块</h3>
           <div className="sectors-row">
@@ -87,6 +90,13 @@ export default function MarketOverview({
             })}
           </div>
         </div>
+      ) : (
+        indices.length > 0 && (
+          <div className="sectors-section">
+            <h3>行业板块</h3>
+            <Skeleton.Sectors count={8} />
+          </div>
+        )
       )}
     </section>
   );

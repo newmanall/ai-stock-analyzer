@@ -27,10 +27,13 @@ import DataManagement from "./DataManagement.jsx";
 import { loadWatchlist, saveWatchlist } from "./utils/watchlistStorage.js";
 import { useTheme } from "./hooks/useTheme.js";
 import { useTabNavigation } from "./hooks/useTabNavigation.js";
+import { useToast } from "./components/Toast.jsx";
 
 export default function App() {
   const { theme, toggleTheme } = useTheme();
   const { activeTab, setActiveTab } = useTabNavigation();
+  const addToast = useToast();
+
   const [market, setMarket] = useState("usstock");
   const [symbol, setSymbol] = useState("");
   const [stockData, setStockData] = useState(null);
@@ -79,7 +82,6 @@ export default function App() {
 
   // ── Data loading ──────────────────────────────────────────────────────────
   async function loadRecent() {
-    // 加载最近分析记录
     try {
       const r = await fetchRecentAnalysis();
       setRecent(r.items || []);
@@ -182,31 +184,31 @@ export default function App() {
   }
 
   async function handleTechAnalysis() {
-    if (!stockData?.symbol) { setError("请先获取股票数据"); return; }
+    if (!stockData?.symbol) { addToast("请先获取股票数据", "warning"); return; }
     try {
       const t = await analyzeTechnical(stockData.symbol); setTechData(t);
       const a = await explainTechnical({ stockName: stockData.name || stockData.symbol, indicators: t.allIndicators, signals: t.allSignals }); setTechAI(a);
-    } catch (err) { setError("技术分析失败: " + err.message); }
+    } catch (err) { addToast("技术分析失败: " + err.message, "error"); }
   }
 
   async function handleCapitalAnalysis() {
-    if (!stockData?.symbol) { setError("请先获取股票数据"); return; }
+    if (!stockData?.symbol) { addToast("请先获取股票数据", "warning"); return; }
     try {
       const c = await analyzeCapitalFlow(stockData.symbol); setCapitalData(c);
       const a = await explainCapitalFlow({ stockName: stockData.name || stockData.symbol, flowData: c, priceInfo: { close: stockData.close, changePercent: stockData.changePercent } }); setCapitalAI(a);
-    } catch (err) { setError("资金分析失败: " + err.message); }
+    } catch (err) { addToast("资金分析失败: " + err.message, "error"); }
   }
 
   async function handleNorthboundAnalysis() {
     try {
       const nb = await analyzeNorthbound(); setNbData(nb);
       const a = await explainNorthbound({ nbData: nb, marketContext: "正常" }); setNbAI(a);
-    } catch (err) { setError("北向资金分析失败: " + err.message); }
+    } catch (err) { addToast("北向资金分析失败: " + err.message, "error"); }
   }
 
   async function handleComprehensive() {
-    if (!stockData?.symbol) { setError("请先获取股票数据"); return; }
-    setCompLoading(true); setError("");
+    if (!stockData?.symbol) { addToast("请先获取股票数据", "warning"); return; }
+    setCompLoading(true);
     try {
       const [tech, cap, nb, finance] = await Promise.all([
         analyzeTechnical(stockData.symbol).catch(() => null),
@@ -222,7 +224,7 @@ export default function App() {
       ]);
       const comp = await comprehensiveAnalysis({ stockName: stockData.name || stockData.symbol, stockSymbol: stockData.symbol, technical: tech, capital: cap, northbound: nb, marketIndex: "上证指数", financeData: finance });
       setComprehensive(comp);
-    } catch (err) { setError("综合研判失败: " + err.message); }
+    } catch (err) { addToast("综合研判失败: " + err.message, "error"); }
     finally { setCompLoading(false); }
   }
 
@@ -244,7 +246,7 @@ export default function App() {
   }, [activeTab]);
 
   async function handleDeleteAnalysis(id) {
-    try { await deleteAnalysis(id); setRecent(p => p.filter(r => r.id !== id)); } catch (err) { console.error('[App] 删除分析记录失败:', err.message || err); }
+    try { await deleteAnalysis(id); setRecent(p => p.filter(r => r.id !== id)); addToast("分析记录已删除", "success"); } catch (err) { console.error('[App] 删除分析记录失败:', err.message || err); }
   }
 
   async function handleDeleteRecord(tab, id) {
@@ -253,6 +255,7 @@ export default function App() {
       if (tab === "searchHistory") { await deleteSearchHistory(id); setSearchHistory(p => p.filter(r => r.id !== id)); }
       else if (tab === "researchReports") { await deleteResearchReport(id); setResearchReports(p => p.filter(r => r.id !== id)); }
       else if (tab === "investmentTheses") { await deleteInvestmentThesis(id); setInvestmentTheses(p => p.filter(r => r.id !== id)); }
+      addToast("记录已删除", "success");
     } catch (err) { console.error('[App] 删除数据记录失败:', err.message || err); }
     finally { setDeletingId(null); }
   }
@@ -272,6 +275,7 @@ export default function App() {
       if (prev.find(w => w.symbol === item.symbol)) return prev;
       const next = [...prev, item]; saveWatchlist(next); return next;
     });
+    addToast(`已加入自选: ${item.symbol}`, "success");
   }, [stockData, market]);
 
   const removeFromWatchlist = useCallback((sym) => {
@@ -302,7 +306,7 @@ export default function App() {
           <BarChart3 size={22} />
           <h1>AI 股票 Dashboard</h1>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        <div className="topbar-right">
           <button className="theme-toggle" onClick={toggleTheme} aria-label="切换主题" title={theme === "dark" ? "切换到亮色模式" : "切换到暗色模式"}>
             {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
           </button>
@@ -321,13 +325,13 @@ export default function App() {
       </div>
 
       {activeTab === "market" && (
-        <>
+        <div className="tab-content">
           <MarketOverview indices={indices} indicesScroll={indicesScroll} onScrollIndices={handleIndicesScroll} sectors={sectors} />
 
           {eastMoneySectors.length > 0 && market === "astock" && (
-            <div className="sectors-section" style={{ marginBottom: "16px" }}>
+            <div className="em-sectors-section sectors-section">
               <div className="section-header">
-                <h3>东方财富 · 行业板块 <span style={{ fontSize:"0.7rem", color:"var(--text-secondary)", fontWeight:400 }}>免费实时</span></h3>
+                <h3>东方财富 · 行业板块 <span className="badge-subtle">免费实时</span></h3>
               </div>
               <div className="sectors-row">
                 {eastMoneySectors.slice(0,12).map((sec, i) => {
@@ -358,9 +362,9 @@ export default function App() {
           </section>
 
           {stockData && market === "astock" && (
-            <div className="card" style={{ marginBottom: "16px" }}>
+            <div className="card em-flow-card card-lift">
               <div className="card-header">
-                <h2>东方财富 · 资金流向 <span style={{ fontSize:"0.7rem", color:"var(--text-secondary)", fontWeight:400 }}>免费实时</span></h2>
+                <h2>东方财富 · 资金流向 <span className="badge-subtle">免费实时</span></h2>
                 <button className="btn-analyze btn-sm" onClick={async () => {
                   const code = stockData.symbol.startsWith("6") || stockData.symbol.startsWith("688")
                     ? `1.${stockData.symbol}`
@@ -375,45 +379,44 @@ export default function App() {
                 <div className="capital-details">
                   <div className="capital-item">
                     <span>主力净流入</span>
-                    <strong style={{color: (emFlow.mainNetInflow || 0) >= 0 ? "var(--up)" : "var(--down)"}}>
+                    <strong className={(emFlow.mainNetInflow || 0) >= 0 ? "amount-up" : "amount-down"}>
                       {emFlow.mainNetInflow != null ? `${emFlow.mainNetInflow.toFixed(2)}亿` : "--"}
                     </strong>
                   </div>
                   <div className="capital-item">
                     <span>超大单</span>
-                    <strong style={{color: (emFlow.superLargeNetInflow || 0) >= 0 ? "var(--up)" : "var(--down)"}}>
+                    <strong className={(emFlow.superLargeNetInflow || 0) >= 0 ? "amount-up" : "amount-down"}>
                       {emFlow.superLargeNetInflow != null ? `${emFlow.superLargeNetInflow.toFixed(2)}亿` : "--"}
                     </strong>
                   </div>
                   <div className="capital-item">
                     <span>大单</span>
-                    <strong style={{color: (emFlow.largeNetInflow || 0) >= 0 ? "var(--up)" : "var(--down)"}}>
+                    <strong className={(emFlow.largeNetInflow || 0) >= 0 ? "amount-up" : "amount-down"}>
                       {emFlow.largeNetInflow != null ? `${emFlow.largeNetInflow.toFixed(2)}亿` : "--"}
                     </strong>
                   </div>
                   <div className="capital-item">
                     <span>小单</span>
-                    <strong style={{color: (emFlow.smallNetInflow || 0) >= 0 ? "var(--up)" : "var(--down)"}}>
+                    <strong className={(emFlow.smallNetInflow || 0) >= 0 ? "amount-up" : "amount-down"}>
                       {emFlow.smallNetInflow != null ? `${emFlow.smallNetInflow.toFixed(2)}亿` : "--"}
                     </strong>
                   </div>
                 </div>
               ) : (
-                <div className="empty-state" style={{ minHeight: "60px", fontSize: "0.82rem" }}>
+                <div className="empty-state-sm">
                   {stockData.symbol.startsWith("6") ? "沪市" : "深市"} · 点击查看实时资金流向
                 </div>
               )}
             </div>
           )}
-        </>
+        </div>
       )}
 
       {activeTab === "analysis" && (
-        <>
+        <div className="tab-content">
           <div className="top-secondary-grid">
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <select value={sector} onChange={e => setSector(e.target.value)}
-                style={{ padding: "6px 12px", borderRadius: "8px", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text)", fontSize: "14px", cursor: "pointer", width: "fit-content" }}>
+            <div className="flex-col-12">
+              <select className="form-select" value={sector} onChange={e => setSector(e.target.value)}>
                 <option value="all">全市场</option>
                 <option value="bank">银行</option>
                 <option value="liquor">白酒</option>
@@ -460,34 +463,34 @@ export default function App() {
           )}
 
           {!stockData && (
-            <div className="empty-state" style={{ marginBottom: "20px" }}>
+            <div className="empty-state">
               请先在"行情"Tab中搜索股票数据，再查看技术分析
             </div>
           )}
-        </>
+        </div>
       )}
 
       {activeTab === "comprehensive" && (
-        <>
+        <div className="tab-content">
           {stockData && (
             <Comprehensive comprehensive={comprehensive} loading={compLoading} onAnalyze={handleComprehensive} />
           )}
-          <section className="bottom-grid" style={{ marginTop: stockData ? 0 : 0 }}>
+          <section className="bottom-grid">
             <WatchlistPanel watchlist={watchlist} onSelect={selectFromWatchlist} onRemove={removeFromWatchlist} />
             <HistoryPanel recent={recent} onDelete={handleDeleteAnalysis} />
           </section>
-        </>
+        </div>
       )}
 
       {activeTab === "data" && (
-        <>
-          <div className="card" style={{ marginBottom:"12px", padding:"12px 16px", fontSize:"0.82rem" }}>
+        <div className="tab-content">
+          <div className="card supabase-status">
             {supabaseStatus === null ? (
-              <span style={{ color:"var(--text-secondary)" }}>检查 Supabase 连接中...</span>
+              <span className="supabase-loading">检查 Supabase 连接中...</span>
             ) : supabaseStatus.ok ? (
-              <span style={{ color:"var(--up)" }}>● Supabase 已连接 · 数据存储正常 {supabaseStatus.hasData ? "· 已有数据记录" : "· 暂无数据"}</span>
+              <span className="supabase-ok">● Supabase 已连接 · 数据存储正常 {supabaseStatus.hasData ? "· 已有数据记录" : "· 暂无数据"}</span>
             ) : (
-              <span style={{ color:"var(--down)" }}>● Supabase 连接异常: {supabaseStatus.error || "未知错误"}</span>
+              <span className="supabase-error">● Supabase 连接异常: {supabaseStatus.error || "未知错误"}</span>
             )}
           </div>
           <DataManagement
@@ -495,7 +498,7 @@ export default function App() {
           investmentTheses={investmentTheses} deletingId={deletingId}
           onTabChange={loadDataTab} onDeleteRecord={handleDeleteRecord} onClearAll={handleClearAll}
         />
-        </>
+        </div>
       )}
 
       <footer className="footer">

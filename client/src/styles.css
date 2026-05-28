@@ -1974,3 +1974,328 @@ button:disabled {
     gap: 4px;
   }
 }
+
+/* =================================================================
+   🎨 UI 优化阶段 — Toast / Skeleton / 动画 / 工具类
+   ================================================================= */
+
+/* ── Toast Notification ───────────────────────────────────────── */
+
+.toast-container {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 400px;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  pointer-events: auto;
+  animation: toast-slide-in 0.3s ease-out;
+  font-size: 0.88rem;
+}
+
+@keyframes toast-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.toast-icon { flex-shrink: 0; }
+.toast-message { flex: 1; line-height: 1.5; }
+.toast-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.toast-close:hover { background: var(--bg-muted); }
+
+.toast-info .toast-icon { color: var(--accent); }
+.toast-success .toast-icon { color: #22c55e; }
+.toast-warning .toast-icon { color: #f59e0b; }
+.toast-error .toast-icon { color: #ef4444; }
+
+.toast-success { border-left: 3px solid #22c55e; }
+.toast-warning { border-left: 3px solid #f59e0b; }
+.toast-error { border-left: 3px solid #ef4444; }
+.toast-info { border-left: 3px solid var(--accent); }
+
+/* ── Skeleton Shimmer (替换已有的简单骨架) ─────────────────── */
+
+.skeleton-card {
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+}
+
+.skeleton-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.skeleton-line {
+  height: 14px;
+  border-radius: 4px;
+}
+
+.skeleton-chart {
+  border-radius: 6px;
+  margin: 4px 0;
+}
+
+.skeleton-index-card {
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-soft);
+}
+
+/* ── Tab Content Fade-in ──────────────────────────────────────── */
+
+.tab-content {
+  animation: tab-fade-in 0.25s ease-out;
+}
+
+@keyframes tab-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Card Lift (hover 动效) ───────────────────────────────────── */
+
+.card-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+[data-theme="dark"] .card-lift:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Topbar Right (替换内联 style) ───────────────────────────── */
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ── 东方财富内联 style 替换 ──────────────────────────────────── */
+
+.em-flow-card {
+  margin-bottom: 16px;
+}
+
+.em-sectors-section {
+  margin-bottom: 16px;
+}
+
+.badge-subtle {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.amount-up {
+  color: var(--up);
+}
+
+.amount-down {
+  color: var(--down);
+}
+
+/* ── 空状态小号变体 ──────────────────────────────────────────── */
+
+.empty-state-sm {
+  min-height: 60px;
+  font-size: 0.82rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+
+/* ── Flex 工具类 ──────────────────────────────────────────────── */
+
+.flex-col-12 {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.flex-row-12 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ── 表单 Select (替换 sector 下拉内联 style) ────────────────── */
+
+.form-select {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+  width: fit-content;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.form-select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.12);
+}
+
+/* ── Supabase Status Bar ──────────────────────────────────────── */
+
+.supabase-status {
+  padding: 12px 16px;
+  font-size: 0.82rem;
+  margin-bottom: 12px;
+}
+
+.supabase-loading {
+  color: var(--text-secondary);
+}
+
+.supabase-ok {
+  color: var(--up);
+}
+
+.supabase-error {
+  color: var(--down);
+}
+
+/* ── 错误/引导态增强 ──────────────────────────────────────────── */
+
+.empty-state-guide {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  min-height: 160px;
+  padding: 32px 24px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  line-height: 1.7;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+
+.empty-state-guide-icon {
+  color: var(--border);
+  opacity: 0.5;
+}
+
+.empty-state-guide .btn-analyze,
+.empty-state-guide .btn-scan {
+  margin-top: 4px;
+}
+
+/* ── Empty state description (Northbound/CapitalFlow) ──────────── */
+
+.empty-state-desc {
+  margin-top: 10px;
+  font-size: 0.82rem;
+}
+
+/* ── Mock warning bar (Northbound/CapitalFlow) ─────────────────── */
+
+.mock-warning {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  margin-bottom: 10px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+}
+
+[data-theme="dark"] .mock-warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+/* ── Loading indicator 内联替换 ───────────────────────────────── */
+
+.loading-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+/* ── 暗色主题一致性补充 ──────────────────────────────────────── */
+
+[data-theme="dark"] .sector-tag {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .index-card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .screener-card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="dark"] .card-lift:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="dark"] .empty-state {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ── 响应式补充 ───────────────────────────────────────────────── */
+
+@media (max-width: 560px) {
+  .toast-container {
+    top: 8px;
+    right: 8px;
+    left: 8px;
+    max-width: none;
+  }
+}
