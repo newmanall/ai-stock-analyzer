@@ -74,7 +74,7 @@ async function main() {
   // 尝试通过 Management API 执行SQL
   console.log('\n尝试通过 Supabase Management API 执行 SQL...');
   
-  const managementUrl = `https://api.supabase.com/v1/projects/drkyejfdazpqnumaxxed/query`;
+  const managementUrl = `SUPABASE_MANAGEMENT_API_URL`;
   
   // 读取SQL文件
   const sqlPath = path.join(__dirname, '..', 'output', 'supabase_migration.sql');
@@ -99,7 +99,7 @@ async function main() {
   console.log('\n=== SQL 迁移文件路径 ===');
   console.log(sqlPath);
   console.log('\n=== 请在 Supabase SQL Editor 中执行 ===');
-  console.log('1. 打开 https://app.supabase.com/project/drkyejfdazpqnumaxxed/sql/new');
+  console.log('1. 打开 Supabase Dashboard SQL Editor');
   console.log('2. 粘贴以下 SQL');
   console.log('3. 点击 Run');
 }

@@ -3,6 +3,13 @@
  * Data source: East Money HSGT (沪深港通) APIs.
  */
 
+// 添加必要的请求头，避免被东财 API 拦截
+const EAST_MONEY_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Referer": "https://emweb.securities.eastmoney.com/PC_H5/",
+  "Accept": "application/json",
+};
+
 const NB_REALTIME_URL = "https://push2.eastmoney.com/api/qt/kamt/get";
 const NB_HISTORY_URL = "https://push2.eastmoney.com/api/qt/kamt.kline/get";
 
@@ -11,7 +18,7 @@ const NB_HISTORY_URL = "https://push2.eastmoney.com/api/qt/kamt.kline/get";
 export async function analyzeNorthbound() {
   // Fetch realtime data
   const rtUrl = `${NB_REALTIME_URL}?type=hsgt&fields1=f1,f2,f3,f4&fields2=f51,f52,f53,f54,f55,f56`;
-  const rtRes = await fetch(rtUrl);
+  const rtRes = await fetch(rtUrl, { headers: EAST_MONEY_HEADERS });
   if (!rtRes.ok) {
     throw new Error(`Northbound realtime API failed: ${rtRes.status}`);
   }
@@ -32,7 +39,7 @@ export async function analyzeNorthbound() {
   let consecutiveInflowDays = 0;
 
   try {
-    const histRes = await fetch(histUrl);
+    const histRes = await fetch(histUrl, { headers: EAST_MONEY_HEADERS });
     if (histRes.ok) {
       const histRaw = await histRes.json();
       const hk2sh = histRaw?.data?.hk2sh || [];

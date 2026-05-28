@@ -184,3 +184,25 @@ export function deleteAnalysis(id) {
     method: "DELETE",
   });
 }
+
+// ── 东方财富免费 API ───────────────────────────────────────────────────────────
+
+/** 东方财富实时行情，secid 格式: 0.600519 (沪) / 1.000001 (深) */
+export function fetchEastMoneyQuote(secid) {
+  return request(`/api/eastmoney/quote?secid=${encodeURIComponent(secid)}`);
+}
+
+/** 东方财富 K 线数据 */
+export function fetchEastMoneyKLine(secid, period = "day", count = 200) {
+  return request(`/api/eastmoney/kline?secid=${encodeURIComponent(secid)}&period=${period}&count=${count}`);
+}
+
+/** 东方财富资金流向 */
+export function fetchEastMoneyFlow(secid, days = 30) {
+  return request(`/api/eastmoney/flow?secid=${encodeURIComponent(secid)}&days=${days}`);
+}
+
+/** 东方财富行业板块 */
+export function fetchEastMoneySectors() {
+  return request("/api/eastmoney/sectors");
+}

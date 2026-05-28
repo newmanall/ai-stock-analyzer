@@ -92,12 +92,26 @@ function heuristicAnalysis({ symbol, stockData }) {
   if (stockData.pe == null) dataNotes.push("市盈率数据暂不可用");
   const dataNote = dataNotes.length ? `（${dataNotes.join("、")}）` : "";
 
+  // 数据来源标注
+  const dataSource = stockData._dataSource || { primary: "unknown" };
+  const sourceLabel = dataSource.tencent_api ? "腾讯财经" :
+                      dataSource.mock_database ? "模拟数据" :
+                      "未知来源";
+
   return {
-    summary: `${symbol} 短线动能呈${sentimentCN}趋势，基于最新收盘价、日内涨跌幅${trend != null ? "及近期收盘价序列" : ""}判断${dataNote}。此为模拟分析，不构成投资建议。`,
+    summary: `${symbol} 短线动能呈${sentimentCN}趋势，基于最新收盘价、日内涨跌幅${trend != null ? "及近期收盘价序列" : ""}判断${dataNote}。数据来源：${sourceLabel}。此为模拟分析，不构成投资建议。`,
     sentiment,
     risk_level,
     key_factors: keyFactors.slice(0, 3),
     suggestion,
+    // 数据来源标注
+    _data_source: {
+      primary: dataSource.primary,
+      tencent_api: dataSource.tencent_api || false,
+      mock_database: dataSource.mock_database || false,
+      error: dataSource.error || null,
+      timestamp: dataSource.timestamp || new Date().toISOString(),
+    },
   };
 }
 
@@ -136,21 +150,49 @@ export async function analyzeStockData({ symbol, stockData }) {
     });
 
     const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+    
+    // 在用户提示中加入数据来源信息
+    const dataSource = stockData._dataSource || { primary: "unknown" };
+    const sourceInfo = dataSource.tencent_api ? "实时数据（腾讯财经 API）" :
+                       dataSource.mock_database ? "模拟数据（数据库回退）" :
+                       "数据源未知";
+    
     const completion = await createChatCompletion(client, {
       model,
       temperature: 0.2,
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: buildUserPrompt({ symbol, stockData }) }
+        { role: "user", content: `数据来源：${sourceInfo}\n\n${buildUserPrompt({ symbol, stockData }).trim()}` }
       ]
     });
 
     const content = completion.choices?.[0]?.message?.content;
     const parsed = parseJsonObject(content);
-    return validateAnalysisJson(parsed);
+    const result = validateAnalysisJson(parsed);
+    
+    // 添加数据来源标注
+    result._data_source = {
+      primary: dataSource.primary,
+      tencent_api: dataSource.tencent_api || false,
+      mock_database: dataSource.mock_database || false,
+      error: dataSource.error || null,
+      llm_model: model,
+      timestamp: new Date().toISOString(),
+    };
+    
+    return result;
   } catch (error) {
     console.warn("OpenAI API failed, falling back to heuristic analysis:", error.message);
-    return validateAnalysisJson(heuristicAnalysis({ symbol, stockData }));
+    const fallback = validateAnalysisJson(heuristicAnalysis({ symbol, stockData }));
+    // 确保 fallback 也有数据来源
+    if (!fallback._data_source) {
+      fallback._data_source = {
+        primary: "heuristic",
+        note: "AI 服务不可用，使用启发式分析",
+        timestamp: new Date().toISOString(),
+      };
+    }
+    return fallback;
   }
 }
 

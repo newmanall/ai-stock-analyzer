@@ -12,7 +12,8 @@
     "dev:server": "nodemon server/index.js",
     "build": "vite build --config client/vite.config.js",
     "start": "node server/index.js",
-    "check": "node --check server/index.js && node --check server/aiService.js && node --check server/stockService.js && node --check server/supabase.js && node --check server/validators.js"
+    "check": "npm run check:server && npm run build",
+    "check:server": "node server/scripts/check-server-syntax.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.46.1",
@@ -23,7 +24,8 @@
     "openai": "^4.73.1",
     "pg": "^8.21.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.3",

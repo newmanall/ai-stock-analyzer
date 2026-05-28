@@ -36,6 +36,39 @@ function formatPercent(value) {
   return `${value.toFixed(2)}%`;
 }
 
+const VOLUME_PRICE_MAP = {
+  "量价齐升": "量价齐升",
+  "量价背离": "量价背离",
+  "放量下跌": "放量下跌",
+  "缩量上涨": "缩量上涨",
+  "放量上涨": "放量上涨",
+  "缩量下跌": "缩量下跌",
+  "平衡": "量价平衡",
+};
+
+const CAPITAL_ASSESSMENT_MAP = {
+  "Bullish": "看涨",
+  "Bearish": "看跌",
+  "Neutral": "中性",
+  "Strong Buy": "强烈买入",
+  "Buy": "买入",
+  "Hold": "持有",
+  "Sell": "卖出",
+  "Strong Sell": "强烈卖出",
+  "Overweight": "超配",
+  "Underweight": "低配",
+};
+
+function translateVolumePrice(value) {
+  if (!value) return "--";
+  return VOLUME_PRICE_MAP[value] || value;
+}
+
+function translateAssessment(value) {
+  if (!value) return "--";
+  return CAPITAL_ASSESSMENT_MAP[value] || value;
+}
+
 export default function CapitalFlow({ capitalData, capitalAI, onAnalyze }) {
   if (!capitalData) {
     return (
@@ -114,8 +147,8 @@ export default function CapitalFlow({ capitalData, capitalAI, onAnalyze }) {
           <MiniSparkline values={cd.recent5DaysFlow || []} />
         </div>
         <div className="capital-status">
-          <span>量价状态: <strong>{cd.volumePriceMatch ?? "--"}</strong></span>
-          <span>综合评估: <strong>{cd.assessment ?? "--"}</strong></span>
+          <span>量价状态: <strong>{translateVolumePrice(cd.volumePriceMatch)}</strong></span>
+          <span>综合评估: <strong>{translateAssessment(cd.assessment)}</strong></span>
         </div>
       </div>
 

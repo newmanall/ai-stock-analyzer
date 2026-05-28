@@ -1,19 +1,25 @@
 import express from 'express';
-import { 
-  saveSearchHistory, 
-  getSearchHistory, 
-  deleteSearchHistory, 
-  clearAllSearchHistory,
+import {
+  saveSearchHistory,
+  getSearchHistory,
+  deleteSearchHistory,
+  clearAllSearchHistory
+} from './db/searchHistory.js';
+import {
   saveResearchReport,
   getResearchReports,
-  deleteResearchReport,
+  deleteResearchReport
+} from './db/researchReports.js';
+import {
   saveInvestmentThesis,
   getInvestmentTheses,
   updateThesisStatus,
-  deleteInvestmentThesis,
+  deleteInvestmentThesis
+} from './db/investmentTheses.js';
+import {
   deleteAnalysis,
   clearAllAnalyses
-} from './supabase.js';
+} from './db/analyses.js';
 
 const router = express.Router();
 

@@ -3,6 +3,13 @@
  * Data source: East Money free APIs.
  */
 
+// 添加必要的请求头，避免被东财 API 拦截
+const EAST_MONEY_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Referer": "https://emweb.securities.eastmoney.com/PC_H5/",
+  "Accept": "application/json",
+};
+
 const EAST_MONEY_QUOTE_URL = "https://push2.eastmoney.com/api/qt/stock/get";
 const EAST_MONEY_FLOW_URL = "https://push2.eastmoney.com/api/qt/stock/fflow/daykline/get";
 
@@ -20,7 +27,7 @@ export async function analyzeCapitalFlow(code) {
   const quoteFields = "f43,f57,f58,f62,f64,f66,f70,f72,f76,f78,f82,f84,f170,f184,f186,f188,f190,f192";
   const quoteUrl = `${EAST_MONEY_QUOTE_URL}?secid=${secid}&fields=${quoteFields}`;
 
-  const quoteRes = await fetch(quoteUrl);
+  const quoteRes = await fetch(quoteUrl, { headers: EAST_MONEY_HEADERS });
   if (!quoteRes.ok) {
     throw new Error(`Capital flow quote API failed: ${quoteRes.status}`);
   }
@@ -30,7 +37,7 @@ export async function analyzeCapitalFlow(code) {
   // Fetch daily flow history
   const flowUrl = `${EAST_MONEY_FLOW_URL}?secid=${secid}&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65&lmt=10`;
 
-  const flowRes = await fetch(flowUrl);
+  const flowRes = await fetch(flowUrl, { headers: EAST_MONEY_HEADERS });
   let dailyFlows = [];
   if (flowRes.ok) {
     const flowRaw = await flowRes.json();

@@ -60,18 +60,17 @@ export function validateAStockData(stockData) {
     throw new Error("stockData must be an object.");
   }
 
-  const required = ["symbol", "latestDate", "open", "high", "low", "close", "volume", "changePercent", "recentCloses"];
+  const required = ["symbol", "latestDate", "open", "high", "low", "close", "volume", "changePercent"];
   for (const key of required) {
     if (!(key in stockData)) {
       throw new Error(`stockData is missing required field: ${key}`);
     }
   }
 
-  if (!Array.isArray(stockData.recentCloses) || stockData.recentCloses.length === 0) {
-    throw new Error("stockData.recentCloses must be a non-empty array.");
-  }
-
-  return stockData;
+  return {
+    ...stockData,
+    recentCloses: Array.isArray(stockData.recentCloses) ? stockData.recentCloses : [],
+  };
 }
 
 export function validateAnalysisJson(data) {
